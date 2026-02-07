@@ -1,4 +1,5 @@
 build/
 *.o
-
+*.m4a
+*.mp4
 revision.txt

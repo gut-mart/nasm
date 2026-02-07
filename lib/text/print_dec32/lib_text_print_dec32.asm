@@ -5,7 +5,7 @@
 ; DESTRUYE: RAX, RCX, RDX, RSI, R11 (Estándar Syscall)
 ; ==============================================================================
 
-%include "constants.inc"
+%include "lib/constants.inc"
 
 default rel
 section .text

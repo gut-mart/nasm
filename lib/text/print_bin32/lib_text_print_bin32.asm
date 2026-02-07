@@ -3,7 +3,7 @@
 ; DESCRIPCIÓN: Imprime representación binaria (32 bits).
 ; ==============================================================================
 
-%include "constants.inc"
+%include "lib/constants.inc"
 
 default rel
 section .text
