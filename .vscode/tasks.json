@@ -1,0 +1,25 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Construir Proyecto Actual",
+            "type": "shell",
+            // Pasa el archivo abierto (${relativeFile}) a la variable SRC del Makefile
+            "command": "make SRC=${relativeFile}", 
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            },
+            "problemMatcher": "$gcc"
+        },
+        {
+            "label": "Limpiar Proyecto Actual",
+            "type": "shell",
+            "command": "make clean SRC=${relativeFile}"
+        }
+    ]
+}

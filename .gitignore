@@ -1,0 +1,4 @@
+build/
+*.o
+
+revision.txt

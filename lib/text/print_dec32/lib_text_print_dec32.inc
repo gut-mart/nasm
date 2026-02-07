@@ -1,0 +1,1 @@
+extern lib_text_print_dec32
