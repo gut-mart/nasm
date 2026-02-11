@@ -1,0 +1,388 @@
+==============================================================================
+ RUTA: ./lib/constants.inc
+==============================================================================
+; ==============================================================================
+; RUTA: lib/constants.inc
+; DESCRIPCIÓN: Constantes globales del sistema (Linux x86_64)
+; ==============================================================================
+
+; --- Descriptores de Archivo ---
+STDIN       equ 0
+STDOUT      equ 1
+STDERR      equ 2
+
+; --- Números de Syscall ---
+SYS_READ    equ 0
+SYS_WRITE   equ 1
+SYS_EXIT    equ 60
+
+; --- Códigos de Salida ---
+EXIT_SUCCESS equ 0
+
+
+==============================================================================
+ RUTA: ./lib/text/print_bin32/lib_text_print_bin32.asm
+==============================================================================
+; ==============================================================================
+; RUTA: ./lib/text/print_bin32/lib_text_print_bin32.asm
+; DESCRIPCIÓN: Imprime representación binaria (32 bits).
+; ==============================================================================
+
+%include "constants.inc"
+
+default rel
+section .text
+    global lib_text_print_bin32
+
+lib_text_print_bin32:
+    push rbp
+    mov rbp, rsp
+    
+    ; Reservamos 40 bytes (32 bits + salto + padding extra)
+    ; Nota: 40 no es múltiplo de 16, pero + push rbx (8) = 48 (Ok alineado)
+    sub rsp, 40         
+
+    push rbx            
+    mov ebx, edi        
+    mov rcx, 32         
+    lea rsi, [rsp + 8]  
+
+.bucle_bits:
+    rol ebx, 1          
+    jc .es_uno
+    mov byte [rsi], '0'
+    jmp .siguiente
+.es_uno:
+    mov byte [rsi], '1'
+.siguiente:
+    inc rsi
+    dec rcx
+    jnz .bucle_bits
+
+    mov byte [rsi], 10  ; Salto de línea
+    
+    ; Usando constantes para mayor claridad
+    mov rax, SYS_WRITE  
+    mov rdi, STDOUT     
+    lea rsi, [rsp + 8]  
+    mov rdx, 33         
+    syscall
+
+    pop rbx             
+    add rsp, 40         
+    leave
+    ret
+
+
+==============================================================================
+ RUTA: ./lib/text/print_bin32/lib_text_print_bin32.inc
+==============================================================================
+extern lib_text_print_bin32
+
+
+==============================================================================
+ RUTA: ./lib/text/print_dec32/lib_text_print_dec32.asm
+==============================================================================
+; ==============================================================================
+; RUTA: ./lib/text/print_dec32/lib_text_print_dec32.asm
+; DESCRIPCIÓN: Imprime entero 32 bits con signo.
+; ENTRADA:  EDI = Número a imprimir
+; DESTRUYE: RAX, RCX, RDX, RSI, R11 (Estándar Syscall)
+; ==============================================================================
+
+%include "constants.inc"
+
+default rel
+section .text
+    global lib_text_print_dec32
+
+lib_text_print_dec32:
+    push rbp
+    mov rbp, rsp
+
+    ; --------------------------------------------------------------------------
+    ; ALINEACIÓN DE STACK (Mejora de seguridad)
+    ; --------------------------------------------------------------------------
+    ; Reservamos 32 bytes en lugar de 24.
+    ; 32 es múltiplo de 16, manteniendo el stack alineado para llamadas futuras.
+    sub rsp, 32 
+    
+    push rbx            ; Guardar registro protegido (RBX debe preservarse)
+
+    ; Apuntamos al final del buffer reservado (RSP + 32 bytes)
+    lea rsi, [rsp + 32] 
+    dec rsi
+    mov byte [rsi], 10  ; Ponemos el \n al final
+    dec rsi
+
+    mov eax, edi        ; Argumento
+    xor ebx, ebx        ; Flag de signo (0 = pos)
+
+    test eax, eax
+    jns .conversion
+    neg eax             ; Hacer positivo
+    mov ebx, 1          ; Marcar como negativo
+
+.conversion:
+    mov ecx, 10
+.bucle:
+    xor edx, edx
+    div ecx             ; EAX / 10
+    add dl, '0'
+    mov [rsi], dl
+    dec rsi
+    test eax, eax
+    jnz .bucle
+
+    cmp ebx, 1
+    jne .imprimir
+    mov byte [rsi], '-'
+    dec rsi
+
+.imprimir:
+    inc rsi             ; Corregir puntero al inicio real
+
+    ; Calcular longitud: (Fin del buffer) - (Inicio actual)
+    lea rdx, [rsp + 32] ; ¡OJO! Aquí también usamos 32 ahora
+    sub rdx, rsi        
+    
+    mov rax, SYS_WRITE  ; Usando constante
+    mov rdi, STDOUT     ; Usando constante
+    syscall
+
+    pop rbx
+    add rsp, 32         ; Liberamos los 32 bytes
+    leave
+    ret
+
+
+==============================================================================
+ RUTA: ./lib/text/print_dec32/lib_text_print_dec32.inc
+==============================================================================
+extern lib_text_print_dec32
+
+
+==============================================================================
+ RUTA: ./Makefile
+==============================================================================
+# ==============================================================================
+# MAKEFILE: BINARIOS EN LA CARPETA DEL CÓDIGO FUENTE
+# ==============================================================================
+
+# --- 1. CONFIGURACIÓN ---
+# Archivo principal (pasado por VS Code automáticamente vía tasks.json)
+SRC ?= demo.asm
+
+# Directorios de soporte
+BUILD_DIR = build
+LIB_DIR   = lib
+
+# Herramientas y Flags
+ASM = nasm
+LD  = ld
+ASM_FLAGS = -f elf64 -g -F dwarf -I./ -I./$(LIB_DIR)/
+LD_FLAGS  = -m elf_x86_64
+
+# --- 2. CÁLCULO DE RUTAS (LÓGICA ACTUALIZADA) ---
+
+# TARGET_EXEC: Mantiene la ruta del SRC pero sin extensión
+# Ejemplo: proyectos/mi_juego/main.asm -> proyectos/mi_juego/main
+TARGET_EXEC = $(basename $(SRC))
+
+# TARGET_OBJ: Mantiene la ruta del SRC pero con extensión .o
+# Ejemplo: proyectos/mi_juego/main.asm -> proyectos/mi_juego/main.o
+TARGET_OBJ  = $(basename $(SRC)).o
+
+# --- LIBRERÍAS (Estas se quedan en build/ para limpieza) ---
+LIB_SRCS := $(shell find $(LIB_DIR) -name '*.asm' 2>/dev/null)
+LIB_OBJS := $(patsubst %.asm, $(BUILD_DIR)/%.o, $(LIB_SRCS))
+
+# --- 3. REGLAS ---
+
+.PHONY: all clean directories
+
+all: directories $(TARGET_EXEC)
+
+directories:
+	@mkdir -p $(BUILD_DIR)
+	@mkdir -p $(dir $(LIB_OBJS))
+
+# --- VINCULACIÓN (LINKING) ---
+# Crea el ejecutable final en la carpeta de origen
+$(TARGET_EXEC): $(TARGET_OBJ) $(LIB_OBJS)
+	@echo "[LD] Generando ejecutable: $@"
+	@$(LD) $(LD_FLAGS) -o $@ $^
+
+# --- ENSAMBLADO PRINCIPAL (EN TU CARPETA) ---
+# Crea el .o en la carpeta de origen
+$(TARGET_OBJ): $(SRC)
+	@echo "[ASM] Ensamblando archivo local: $<"
+	@$(ASM) $(ASM_FLAGS) -o $@ $<
+
+# --- ENSAMBLADO DE LIBRERÍAS (EN BUILD) ---
+$(BUILD_DIR)/%.o: %.asm
+	@echo "[ASM] Ensamblando librería: $<"
+	@mkdir -p $(dir $@)
+	@$(ASM) $(ASM_FLAGS) -o $@ $<
+
+# --- LIMPIEZA ---
+# Borra la carpeta build Y TAMBIÉN los archivos generados localmente
+
+# --- LIMPIEZA PROFUNDA (MODO ESCANER) ---
+clean:
+	@echo "[CLEAN] 1. Eliminando carpeta de librerías (build/)..."
+	@rm -rf $(BUILD_DIR)
+
+	@echo "[CLEAN] 2. Buscando y eliminando TODOS los archivos .o dispersos..."
+	@find . -type f -name "*.o" -not -path "*/.git/*" -delete
+
+	@echo "[CLEAN] 3. Eliminando ejecutables asociados a archivos .asm..."
+	# Esta linea busca todos los archivos .asm, les quita la extensión
+	# y borra el archivo ejecutable correspondiente si existe.
+	@find . -type f -name "*.asm" -not -path "*/build/*" \
+		| sed 's/\.asm$$//' \
+		| xargs rm -f
+
+	@echo "[LISTO] Proyecto limpio."
+
+
+==============================================================================
+ RUTA: ./proyectos/demo/demo.asm
+==============================================================================
+; ==============================================================================
+; ARCHIVO: demo.asm
+; DESCRIPCIÓN: Ejemplo básico de uso del framework.
+;              Muestra cómo imprimir texto y usar la librería de números.
+; ==============================================================================
+
+; 1. Inclusión de constantes y librerías
+;    (Las rutas siempre son relativas a la raíz del proyecto)
+%include "lib/constants.inc"
+%include "lib/text/print_dec32/lib_text_print_dec32.inc"
+
+; 2. Configuración obligatoria para 64-bits
+default rel
+
+section .data
+    ; Definimos un mensaje con salto de línea (10) y terminador nulo (0)
+    msg_hola    db "Hola, mundo desde Assembly x64!", 10, 0
+    
+    ; Calculamos la longitud automáticamente
+    len_hola    equ $ - msg_hola
+
+section .text
+    global _start
+
+_start:
+    ; --------------------------------------------------------------------------
+    ; 1. Imprimir un mensaje de texto simple (Syscall directa)
+    ; --------------------------------------------------------------------------
+    mov rax, SYS_WRITE      ; Syscall ID: 1 (Write)
+    mov rdi, STDOUT         ; Descriptor: 1 (Salida estándar)
+    lea rsi, [msg_hola]     ; Dirección del mensaje
+    mov rdx, len_hola       ; Longitud del mensaje
+    syscall
+
+    ; --------------------------------------------------------------------------
+    ; 2. Usar la librería propia para imprimir un número
+    ; --------------------------------------------------------------------------
+    ; La función espera el número en el registro EDI (32 bits)
+    mov edi, -12345         
+    call lib_text_print_dec32 
+
+    ; --------------------------------------------------------------------------
+    ; 3. Salida limpia del programa
+    ; --------------------------------------------------------------------------
+    mov rax, SYS_EXIT       ; Syscall ID: 60 (Exit)
+    mov rdi, EXIT_SUCCESS   ; Código de retorno: 0 (Todo bien)
+    syscall
+
+
+==============================================================================
+ RUTA: ./.vscode/extensions.json
+==============================================================================
+{
+    "recommendations": [
+        "ms-vscode.cpptools",             // C/C++ y Depurador
+        "13xforever.language-x86-64-assembly", // Colores para ASM
+        "DamianKoper.gdb-debug",          // Soporte extra GDB
+        "mhutchie.git-graph"              // Visualizador de Git (Opcional)
+    ]
+}
+
+
+==============================================================================
+ RUTA: ./.vscode/launch.json
+==============================================================================
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Depurar (GDB)",
+            "type": "cppdbg",
+            "request": "launch",
+            // CAMBIO: Busca el ejecutable en la misma carpeta del archivo abierto
+            "program": "${fileDirname}/${fileBasenameNoExtension}",
+            "args": [],
+            "stopAtEntry": true,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
+            "miDebuggerPath": "/usr/bin/gdb",
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Habilitar impresión bonita para gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                },
+                {
+                    "description": "Forzar arquitectura x86_64",
+                    "text": "set architecture i386:x86-64",
+                    "ignoreFailures": true
+                }
+            ],
+            "preLaunchTask": "Construir Proyecto Actual"
+        }
+    ]
+}
+
+
+==============================================================================
+ RUTA: ./.vscode/settings.json
+==============================================================================
+{
+    "debug.allowBreakpointsEverywhere": true
+}
+
+
+==============================================================================
+ RUTA: ./.vscode/tasks.json
+==============================================================================
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Construir Proyecto Actual",
+            "type": "shell",
+            // Pasa el archivo abierto (${relativeFile}) a la variable SRC del Makefile
+            "command": "make SRC=${relativeFile}", 
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            },
+            "problemMatcher": "$gcc"
+        },
+        {
+            "label": "Limpiar Proyecto Actual",
+            "type": "shell",
+            "command": "make clean SRC=${relativeFile}"
+        }
+    ]
+}
+
+

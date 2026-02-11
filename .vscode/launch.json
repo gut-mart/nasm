@@ -5,9 +5,8 @@
             "name": "Depurar (GDB)",
             "type": "cppdbg",
             "request": "launch",
-            // CAMBIO IMPORTANTE: 
-            // Usa ${workspaceFolder} para buscar siempre en la carpeta 'build' de la raíz.
-            "program": "${workspaceFolder}/build/${fileBasenameNoExtension}",
+            // CAMBIO: Busca el ejecutable en la misma carpeta del archivo abierto
+            "program": "${fileDirname}/${fileBasenameNoExtension}",
             "args": [],
             "stopAtEntry": true,
             "cwd": "${workspaceFolder}",
@@ -27,7 +26,6 @@
                     "ignoreFailures": true
                 }
             ],
-            // Ejecuta la tarea de compilación antes de lanzar el depurador
             "preLaunchTask": "Construir Proyecto Actual"
         }
     ]

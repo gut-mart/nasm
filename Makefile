@@ -1,76 +1,79 @@
 # ==============================================================================
-# MAKEFILE DINÁMICO PARA ENSAMBLADOR X86_64 (NASM)
+# MAKEFILE: BINARIOS EN LA CARPETA DEL CÓDIGO FUENTE
 # ==============================================================================
 
-# --- 1. CONFIGURACIÓN DE VARIABLES ---
-
-# Archivo principal a compilar (VS Code pasará esto automáticamente)
-# Si no se pasa nada, intenta buscar 'demo.asm' o falla suavemente.
+# --- 1. CONFIGURACIÓN ---
+# Archivo principal (pasado por VS Code automáticamente vía tasks.json)
 SRC ?= demo.asm
 
-# Directorios
+# Directorios de soporte
 BUILD_DIR = build
 LIB_DIR   = lib
 
-# Herramientas
+# Herramientas y Flags
 ASM = nasm
 LD  = ld
-
-# Flags de NASM
-# -f elf64: Formato de archivo Linux 64-bits
-# -g -F dwarf: Información de depuración para GDB
-# -I./ -I./lib/: Rutas para buscar archivos %include
 ASM_FLAGS = -f elf64 -g -F dwarf -I./ -I./$(LIB_DIR)/
+LD_FLAGS  = -m elf_x86_64
 
-# Flags del Linker (ld)
-LD_FLAGS = -m elf_x86_64
+# --- 2. CÁLCULO DE RUTAS (LÓGICA ACTUALIZADA) ---
 
-# --- 2. CÁLCULO AUTOMÁTICO DE ARCHIVOS ---
+# TARGET_EXEC: Mantiene la ruta del SRC pero sin extensión
+# Ejemplo: proyectos/mi_juego/main.asm -> proyectos/mi_juego/main
+TARGET_EXEC = $(basename $(SRC))
 
-# Nombre base del ejecutable (ej: 'demo.asm' -> 'demo')
-# $(notdir ...) quita la ruta, $(basename ...) quita la extensión .asm
-TARGET_NAME = $(basename $(notdir $(SRC)))
-TARGET_EXEC = $(BUILD_DIR)/$(TARGET_NAME)
-TARGET_OBJ  = $(BUILD_DIR)/$(TARGET_NAME).o
+# TARGET_OBJ: Mantiene la ruta del SRC pero con extensión .o
+# Ejemplo: proyectos/mi_juego/main.asm -> proyectos/mi_juego/main.o
+TARGET_OBJ  = $(basename $(SRC)).o
 
-# Encontrar TODAS las librerías .asm en la carpeta lib/ recursivamente
+# --- LIBRERÍAS (Estas se quedan en build/ para limpieza) ---
 LIB_SRCS := $(shell find $(LIB_DIR) -name '*.asm' 2>/dev/null)
-
-# Generar la lista de objetos (.o) esperados para las librerías
-# Ejemplo: lib/text/print.asm -> build/lib/text/print.o
 LIB_OBJS := $(patsubst %.asm, $(BUILD_DIR)/%.o, $(LIB_SRCS))
 
-# --- 3. REGLAS DE CONSTRUCCIÓN ---
+# --- 3. REGLAS ---
 
 .PHONY: all clean directories
 
-# Regla por defecto
 all: directories $(TARGET_EXEC)
 
-# Regla para crear directorios necesarios en build/
 directories:
 	@mkdir -p $(BUILD_DIR)
 	@mkdir -p $(dir $(LIB_OBJS))
 
-# --- LINKING (Vincular todo) ---
-# Crea el ejecutable final juntando el objeto principal + todos los objetos de lib
+# --- VINCULACIÓN (LINKING) ---
+# Crea el ejecutable final en la carpeta de origen
 $(TARGET_EXEC): $(TARGET_OBJ) $(LIB_OBJS)
-	@echo "[LD] Vinculando ejecutable: $@"
+	@echo "[LD] Generando ejecutable: $@"
 	@$(LD) $(LD_FLAGS) -o $@ $^
 
-# --- ENSAMBLADO DEL PROGRAMA PRINCIPAL ---
+# --- ENSAMBLADO PRINCIPAL (EN TU CARPETA) ---
+# Crea el .o en la carpeta de origen
 $(TARGET_OBJ): $(SRC)
-	@echo "[ASM] Ensamblando archivo principal: $<"
+	@echo "[ASM] Ensamblando archivo local: $<"
 	@$(ASM) $(ASM_FLAGS) -o $@ $<
 
-# --- ENSAMBLADO DE LAS LIBRERÍAS ---
-# Regla genérica para cualquier .asm dentro de lib/
+# --- ENSAMBLADO DE LIBRERÍAS (EN BUILD) ---
 $(BUILD_DIR)/%.o: %.asm
 	@echo "[ASM] Ensamblando librería: $<"
 	@mkdir -p $(dir $@)
 	@$(ASM) $(ASM_FLAGS) -o $@ $<
 
 # --- LIMPIEZA ---
+# Borra la carpeta build Y TAMBIÉN los archivos generados localmente
+
+# --- LIMPIEZA PROFUNDA (MODO ESCANER) ---
 clean:
-	@echo "[CLEAN] Borrando carpeta build/"
+	@echo "[CLEAN] 1. Eliminando carpeta de librerías (build/)..."
 	@rm -rf $(BUILD_DIR)
+
+	@echo "[CLEAN] 2. Buscando y eliminando TODOS los archivos .o dispersos..."
+	@find . -type f -name "*.o" -not -path "*/.git/*" -delete
+
+	@echo "[CLEAN] 3. Eliminando ejecutables asociados a archivos .asm..."
+	# Esta linea busca todos los archivos .asm, les quita la extensión
+	# y borra el archivo ejecutable correspondiente si existe.
+	@find . -type f -name "*.asm" -not -path "*/build/*" \
+		| sed 's/\.asm$$//' \
+		| xargs rm -f
+
+	@echo "[LISTO] Proyecto limpio."

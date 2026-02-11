@@ -1,4 +1,19 @@
+# 1. Ignorar toda la carpeta build (donde van los objetos de librerías)
 build/
+
+# 2. Ignorar archivos objeto sueltos (*.o) en cualquier carpeta
+#    (Esto es vital ahora que generas .o junto a tu código)
 *.o
 
-revision.txt
+# 3. Ignorar archivos temporales o de sistema
+.DS_Store
+*.swp
+*~
+
+# 4. Ignorar la carpeta de configuración local de VS Code (opcional pero recomendado)
+.vscode/
+
+# NOTA SOBRE EJECUTABLES:
+# Como en Linux los ejecutables no tienen extensión, es difícil ignorarlos todos automáticamente
+# sin ignorar carpetas por error.
+# REGLA DE ORO: Ejecuta la tarea "Limpiar Proyecto Actual" (make clean) antes de hacer un commit.
