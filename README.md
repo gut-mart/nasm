@@ -1,106 +1,120 @@
-He estructurado el documento para que sirva tanto de documentación para ti mismo en el futuro, como de guía para cualquiera que vea tu repositorio. Explica claramente tu flujo de trabajo "híbrido" (ejecutable local + librerías en build).
+# 🚀 NASM x86_64 Development Framework (Manjaro Edition)
 
-Puedes copiar y pegar el siguiente bloque directamente en un archivo llamado README.md en la raíz de tu proyecto.
+Este repositorio es un entorno de desarrollo profesional y preconfigurado para programar en **Ensamblador (Assembly x86_64)** bajo Linux. 
 
-Markdown
-# NASM x86_64 Development Framework
+Está diseñado específicamente para trabajar con **Visual Studio Code**, automatizando las tareas tediosas de compilación y enlazado.
 
-Este repositorio contiene un entorno de desarrollo para **Ensamblador x86_64** en Linux, preconfigurado para **Visual Studio Code**. 
+## 🧐 ¿Para qué sirve esto? (Contexto para principiantes)
 
-Está diseñado con un flujo de trabajo **híbrido**: mantiene las librerías ordenadas en una carpeta de construcción (`build/`), pero genera los ejecutables y objetos de tu código principal en la **misma carpeta** donde trabajas, facilitando la ejecución y el depurado rápido.
+Programar en ensamblador "a mano" suele ser doloroso. Para probar un simple "Hola Mundo" normalmente tendrías que escribir esto en la terminal cada vez:
 
-## 📂 Estructura del Proyecto
+```bash
+nasm -f elf64 -g -F dwarf programa.asm -o programa.o
+ld -m elf_x86_64 -o programa programa.o
+./programa
+Este proyecto elimina ese dolor.
 
-```text
+Automatización: Con solo pulsar una tecla, el sistema detecta qué archivo estás editando, lo compila, enlaza las librerías necesarias y te deja el ejecutable listo.
+
+Depuración Visual: Viene configurado para usar GDB dentro de VS Code. Puedes ver cómo cambian los registros de la CPU y la memoria línea por línea, sin usar comandos crudos.
+
+Gestión Híbrida: Mantiene tu carpeta de trabajo limpia organizando las librerías compiladas en una carpeta oculta build/, pero dejando tu ejecutable principal a la vista para un acceso rápido.
+
+📂 Estructura del Proyecto (El Árbol)
+Así es como se organiza tu entorno de trabajo:
+
+Plaintext
 .
-├── lib/                  # 📚 Librerías reutilizables (Código Fuente)
-│   ├── constants.inc     # Constantes globales (Syscalls, colores, etc.)
-│   └── text/             # Módulos de texto (ej. print_dec32)
-├── proyectos/            # 🚀 Tu espacio de trabajo (Aquí creas tus .asm)
-│   └── demo/
-│       ├── demo.asm      # Código fuente principal
-│       ├── demo.o        # Objeto (Generado aquí al compilar)
-│       └── demo          # Ejecutable (Generado aquí al compilar)
-├── build/                # ⚙️ Archivos intermedios de librerías (Auto-generado)
-├── .vscode/              # 🛠 Configuración de Tareas y Debugger (GDB)
-└── Makefile              # 🧠 Script de automatización inteligente
-🚀 Requisitos Previos
-Asegúrate de tener instaladas las herramientas básicas de ensamblado y depuración:
+├── 📁 lib/                   # 📚 LIBRERÍAS (Código reutilizable)
+│   ├── constants.inc         # Constantes globales (Syscalls, colores...)
+│   ├── 📁 text/              # Módulos de texto
+│   │   ├── print_dec32/      # Librería para imprimir números decimales
+│   │   └── print_bin32/      # Librería para imprimir binario
+│   └── ...
+│
+├── 📁 proyectos/             # 🔨 TU TALLER (Aquí creas tus programas)
+│   └── 📁 demo/
+│       ├── demo.asm          # Tu código fuente
+│       ├── demo.o            # Objeto (Generado automáticamente aquí)
+│       └── demo              # Ejecutable (Generado automáticamente aquí)
+│
+├── 📁 build/                 # ⚙️ SALA DE MÁQUINAS (Auto-generado)
+│   └── lib/                  # Aquí se guardan los .o de las librerías para no estorbar
+│
+├── 📁 .vscode/               # 🧠 CEREBRO DE VS CODE
+│   ├── tasks.json            # Define los comandos de "Construir" y "Limpiar"
+│   └── launch.json           # Configura el depurador (F5)
+│
+├── .gitignore                # Reglas para Git (ignora binarios)
+└── Makefile                  # Script maestro de compilación inteligente
+🐧 Instalación en Manjaro (Arch Linux)
+Al usar Manjaro, utilizamos pacman en lugar de apt. Abre tu terminal y ejecuta:
 
 Bash
-sudo apt update
-sudo apt install nasm build-essential gdb
-🛠 Cómo Compilar y Ejecutar
-El sistema es dinámico: compila el archivo que tengas abierto en ese momento.
+# 1. Actualizar el sistema
+sudo pacman -Syu
 
-Opción A: Desde Visual Studio Code (Recomendado)
-Abrir archivo: Abre tu archivo .asm principal (ej. proyectos/demo/demo.asm).
+# 2. Instalar herramientas base (NASM, Make, GDB y GCC)
+sudo pacman -S nasm base-devel gdb
+Nota: base-devel incluye make y el enlazador ld.
 
-Compilar: Presiona Ctrl + Shift + B.
+⚡ Guía de Inicio Rápido
+El sistema es dinámico: Compila el archivo que tienes abierto en pantalla.
 
-Resultado: Se crearán demo.o y el ejecutable demo en la misma carpeta.
+1. Compilar y Ejecutar
+Abre VS Code en la carpeta del proyecto.
 
-Depurar (Debug): Presiona F5.
+Abre tu archivo fuente (ej: proyectos/demo/demo.asm).
 
-Se abrirá GDB integrado en VS Code.
+Presiona Ctrl + Shift + B.
 
-Puedes ver registros, memoria y paso a paso.
+Verás que aparecen demo.o y el archivo demo (ejecutable) al lado de tu código.
 
-Opción B: Desde la Terminal (Manual)
-Si prefieres usar la consola, puedes invocar al Makefile pasando la ruta de tu archivo:
+Abre la terminal integrada (Ctrl + ñ) y ejecuta:
 
 Bash
-# Compilar un proyecto específico
+./proyectos/demo/demo
+2. Depurar (Debug)
+Pon un punto de ruptura (clic rojo a la izquierda del número de línea).
+
+Presiona F5.
+
+El programa se pausará y podrás inspeccionar registros y memoria.
+
+3. Limpiar (Clean)
+Para borrar todos los ejecutables y archivos temporales antes de guardar o compartir:
+
+Menú superior: Terminal -> Run Task...
+
+Selecciona: Limpiar Proyecto Actual.
+
+Esto borrará la carpeta build/ y buscará/eliminará cualquier .o disperso.
+
+📝 Cómo crear un nuevo programa
+No necesitas configurar nada nuevo. Solo:
+
+Crea una carpeta nueva en proyectos/ (ej: proyectos/calculadora).
+
+Crea un archivo .asm dentro (ej: main.asm).
+
+Escribe tu código.
+
+Pulsa Ctrl + Shift + B. El Makefile detectará la ubicación automáticamente.
+
+🛠 Comandos Manuales (Terminal)
+Si prefieres no usar VS Code, puedes usar el Makefile directamente desde la terminal:
+
+Bash
+# Compilar un archivo específico
 make SRC=proyectos/demo/demo.asm
 
-# Ejecutar
-./proyectos/demo/demo
-🧹 Limpieza del Proyecto
-Como los ejecutables se generan junto al código fuente, es importante limpiar el proyecto antes de hacer commits o compartir el código.
-
-Desde VS Code: Ejecuta la tarea Limpiar Proyecto Actual (Menú Terminal > Run Task...).
-
-Desde Terminal:
-
-Bash
+# Limpiar todo el proyecto (modo agresivo)
 make clean
-Nota: El comando clean es agresivo: borrará la carpeta build/, todos los archivos .o dispersos y los ejecutables detectados.
-
-🧩 Sistema de Librerías
-Las librerías se encuentran en la carpeta lib/. El Makefile detecta automáticamente cualquier archivo .asm dentro de lib/, lo compila y lo enlaza a tu proyecto.
-
-Cómo usar una librería en tu código:
-Incluye el archivo de cabecera (.inc) en tu código:
-
-Fragmento de código
-%include "lib/text/print_dec32/lib_text_print_dec32.inc"
-Llama a la función (pasando los argumentos según la documentación de la librería):
-
-Fragmento de código
-mov edi, 12345
-call lib_text_print_dec32
-¡Listo! No necesitas modificar el Makefile.
-
-📝 Convenciones de Código
-Punto de entrada: Usa global _start.
-
-Modo: Todo el código debe ser default rel (Position Independent Code).
-
-Registros: Las funciones deben preservar los registros callee-saved (rbx, rbp, r12-r15) según la ABI de System V.
-
-🛡 Git Ignore (Importante)
-Dado que generamos binarios dentro de las carpetas de código, asegúrate de que tu .gitignore contenga:
-
-Fragmento de código
-build/
-*.o
-.vscode/
-# Ejecutables sin extensión (se limpian con make clean)
-Configuración creada para aprendizaje eficiente de Arquitectura de Computadores.
+Configuración optimizada para arquitectura x86_64 en Linux.
 
 
-### ¿Qué valor añadido tiene este README?
+### Principales adaptaciones que he hecho:
 
-1.  [cite_start]**Explica la lógica "Híbrida":** [cite: 30, 31] Deja claro al lector por qué aparecen archivos `.o` en su carpeta pero no en la carpeta `lib`.
-2.  [cite_start]**Documenta la Automatización:** [cite: 57, 58] Explica que la compilación depende del archivo abierto (`${relativeFile}`), algo que no es obvio a primera vista.
-3.  [cite_start]**Seguridad:** Hace énfasis en la limpieza (`make clean`) [cite: 32, 33] y el `.gitignore` para evitar subir binarios al repositorio, que es el riesgo principal de compilar en la misma carpeta.
+1.  **Instalación para Manjaro:** He cambiado los comandos a `sudo pacman -S nasm base-devel gdb`. El paquete `base-devel` es vital en Arch/Manjaro porque contiene `make` y `ld`.
+2.  **Explicación del valor:** La sección "¿Para qué sirve esto?" ayuda a entender por qué este entorno es valioso frente a hacerlo manual.
+3.  **Diagrama de árbol:** He incluido el árbol visual ASCII mostrando claramente la distinción entre `lib/` (fuente) y `build/` ( compilación de lib/').
