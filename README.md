@@ -1,10 +1,10 @@
 # 🚀 NASM x86_64 Development Framework (Manjaro Edition)
 
-Este repositorio es un entorno de desarrollo profesional y preconfigurado para programar en **Ensamblador (Assembly x86_64)** bajo Linux. 
+Este repositorio es un entorno de desarrollo y preconfigurado para programar en **Ensamblador (Assembly x86_64)** bajo Linux. 
 
 Está diseñado específicamente para trabajar con **Visual Studio Code**, automatizando las tareas tediosas de compilación y enlazado.
 
-## 🧐 ¿Para qué sirve esto? (Contexto para principiantes)
+## 🧐 ¿Para qué sirve esto? 
 
 Programar en ensamblador "a mano" suele ser doloroso. Para probar un simple "Hola Mundo" normalmente tendrías que escribir esto en la terminal cada vez:
 
@@ -48,7 +48,7 @@ Plaintext
 ├── .gitignore                # Reglas para Git (ignora binarios)
 └── Makefile                  # Script maestro de compilación inteligente
 🐧 Instalación en Manjaro (Arch Linux)
-Al usar Manjaro, utilizamos pacman en lugar de apt. Abre tu terminal y ejecuta:
+
 
 Bash
 # 1. Actualizar el sistema
