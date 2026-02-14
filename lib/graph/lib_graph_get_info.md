@@ -1,5 +1,7 @@
 
-# 🔌 Especificación de Interfaz de Datos (I/O)
+#  Especificación de Interfaz de Datos (I/O)
+
+#  lib_graph_get_info
 
 ## 1. Entrada de Datos (Input)
 
