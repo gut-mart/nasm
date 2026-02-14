@@ -111,112 +111,126 @@ EXIT_SUCCESS equ 0
 ==============================================================================
 ; ==============================================================================
 ; RUTA: ./lib/graph/lib_graph_get_info.asm
-; ESTRATEGIA: Híbrida.
-; 1. Preguntamos al driver la Resolución y BPP (Extracción).
-; 2. Calculamos el LineLength matemáticamente (Cálculo).
-;    Esto evita el error "518" causado por leer mal la estructura fija.
+; DESCRIPCIÓN: Librería para obtener geometría de pantalla desde /dev/fb0.
 ; ==============================================================================
 
 %include "lib/constants.inc"
+%include "lib/graph/lib_graph_get_info.inc"
 
-; Solo necesitamos la info variable para saber el tamaño
+; Constantes internas
 FBIOGET_VSCREENINFO equ 0x4600  
+SYS_OPEN            equ 2
+SYS_CLOSE           equ 3
+SYS_IOCTL           equ 16
+O_RDONLY            equ 0
 
 default rel
+
+section .data
+    dev_fb db "/dev/fb0", 0
 
 section .text
     global lib_graph_get_info
 
+; ------------------------------------------------------------------------------
+; FUNCIÓN: lib_graph_get_info
+; ENTRADA: RDI = Puntero a una estructura ScreenInfo donde guardar los datos
+; SALIDA:  RAX = 0 (Éxito), -1 (Error)
+; ------------------------------------------------------------------------------
 lib_graph_get_info:
     push rbp
     mov rbp, rsp
     push rbx
-    push rdi            ; Guardar puntero destino
+    push r12                ; Guardamos registros callee-saved
+    
+    mov r12, rdi            ; R12 = Puntero del usuario (ScreenInfo)
 
     ; 1. ABRIR /dev/fb0
-    mov rax, 2          ; SYS_OPEN
-    lea rdi, [rel .dev_fb]
-    mov rsi, 0          ; O_RDONLY
+    mov rax, SYS_OPEN
+    lea rdi, [dev_fb]
+    mov rsi, O_RDONLY
     syscall
     
     cmp rax, 0
-    jl .error_open
-    mov rbx, rax        ; Guardar File Descriptor
+    jl .error
+    mov rbx, rax            ; RBX = File Descriptor
 
-    ; 2. RESERVAR MEMORIA EN PILA (Solo para var_info es suficiente, 160 bytes)
-    sub rsp, 160        
+    ; 2. RESERVAR BUFFER TEMPORAL PARA IOCTL
+    sub rsp, 160            ; Estructura fb_var_screeninfo del kernel
 
-    ; 3. PEDIR DATOS DE RESOLUCIÓN (Ancho, Alto, BPP)
-    mov rax, 16         ; SYS_IOCTL
-    mov rdi, rbx
+    ; 3. CONSULTAR AL DRIVER (IOCTL)
+    mov rax, SYS_IOCTL
+    mov edi, ebx            ; FD
     mov rsi, FBIOGET_VSCREENINFO
-    mov rdx, rsp        ; Puntero a la pila
+    mov rdx, rsp            ; Puntero al stack
     syscall
-    
+
     test rax, rax
-    jnz .error_ioctl
+    jnz .error_close
 
-    ; 4. LEER Y CALCULAR
-    ; Leemos lo que nos dijo el driver:
-    mov r8d,  [rsp]         ; Ancho (xres) -> 1920
-    mov r9d,  [rsp + 4]     ; Alto (yres)  -> 1080
-    mov r10d, [rsp + 24]    ; BPP          -> 32
+    ; 4. EXTRAER Y CALCULAR
+    ; Leemos del stack lo que dijo el kernel
+    mov r8d,  [rsp]         ; Offset 0:  xres (Ancho)
+    mov r9d,  [rsp + 4]     ; Offset 4:  yres (Alto)
+    mov r10d, [rsp + 24]    ; Offset 24: bits_per_pixel
 
-    ; --- AQUÍ ESTÁ EL TRUCO ---
-    ; En lugar de leer el offset 48 de la otra estructura (que da 518 por error),
-    ; calculamos el LineLength nosotros.
-    ; FÓRMULA: LineLength = Ancho * (BPP / 8)
+    ; Calculamos el Pitch (LineLength) matemáticamente
+    ; Pitch = Ancho * (BPP / 8)
+    mov r11d, r10d
+    shr r11d, 3             ; Dividir bits entre 8 para sacar bytes
+    imul r11d, r8d          ; Multiplicar por el ancho
+
+    ; 5. GUARDAR EN LA ESTRUCTURA DEL USUARIO (R12)
+    mov [r12 + ScreenInfo.width],  r8d
+    mov [r12 + ScreenInfo.height], r9d
+    mov [r12 + ScreenInfo.bpp],    r10d
+    mov [r12 + ScreenInfo.pitch],  r11d  ; ¡Aquí va el 7680!
+
+    ; 6. LIMPIEZA
+    add rsp, 160            ; Liberar buffer temporal
     
-    mov r11d, r10d      ; R11D = 32
-    shr r11d, 3         ; R11D = 32 / 8 = 4 (Bytes por pixel)
-    imul r11d, r8d      ; R11D = 4 * 1920 = 7680
-    
-    ; Ahora R11D contiene 7680 garantizado.
-    ; ---------------------------
-
-    ; 5. LIMPIEZA
-    add rsp, 160        ; Liberar pila
-    mov rax, 3          ; SYS_CLOSE
-    mov rdi, rbx
+    mov rax, SYS_CLOSE      ; Cerrar archivo
+    mov edi, ebx
     syscall
 
-    pop rdi             ; Recuperar puntero del usuario
-    
-    ; 6. ESCRIBIR RESULTADOS EN TU BUFFER
-    mov [rdi], r8d      ; Ancho
-    mov [rdi + 4], r9d  ; Alto
-    mov [rdi + 8], r10d ; BPP
-    mov [rdi + 12], r11d ; LineLength (El calculado: 7680)
-
-    xor rax, rax        ; Return 0 (Éxito)
+    xor rax, rax            ; Return 0 (Éxito)
     jmp .fin
 
-.error_ioctl:
+.error_close:
     add rsp, 160
-    mov rax, 3
-    mov rdi, rbx
+    mov rax, SYS_CLOSE
+    mov edi, ebx
     syscall
-    pop rdi
     mov rax, -1
     jmp .fin
 
-.error_open:
-    pop rdi
+.error:
     mov rax, -1
 
 .fin:
+    pop r12
     pop rbx
     leave
     ret
-
-section .data
-    .dev_fb db "/dev/fb0", 0
 
 
 ==============================================================================
  RUTA: ./lib/graph/lib_graph_get_info.inc
 ==============================================================================
-extern lib_graph_get_info
+; ==============================================================================
+; RUTA: ./lib/graph/lib_graph_info.inc
+; DESCRIPCIÓN: Definición de la estructura de información de pantalla.
+; ==============================================================================
+
+struc ScreenInfo
+    .width      resd 1  ; 4 bytes - Ancho (xres)
+    .height     resd 1  ; 4 bytes - Alto (yres)
+    .bpp        resd 1  ; 4 bytes - Bits por Pixel
+    .pitch      resd 1  ; 4 bytes - LineLength (Bytes por línea REALES)
+endstruc
+
+; Tamaño total de la estructura (para reservar memoria con resb)
+ScreenInfo_size equ 16
 
 
 ==============================================================================
@@ -360,122 +374,168 @@ _start:
 ==============================================================================
 ; ==============================================================================
 ; RUTA: ./proyectos/graph/main.asm
-; DESCRIPCIÓN: Muestra TODA la info de la pantalla (Ancho, Alto, BPP, LineLen)
 ; ==============================================================================
 
-%include "lib/constants.inc"
-%include "lib/cnv/lib_cnv_uint32_to_str.inc"
+%include "lib/graph/lib_graph_get_info.inc"
 
 extern lib_graph_get_info
 
 default rel
 
-section .data
-    txt_w       db "Ancho:      ", 0
-    txt_h       db "Alto:       ", 0
-    txt_bpp     db "BPP:        ", 0
-    txt_len     db "LineLength: ", 0
-    newline     db 10, 0
-
+; ------------------------------------------------------------------------------
+; SECCIÓN BSS (Datos no inicializados)
+; ------------------------------------------------------------------------------
 section .bss
-    ; Estructura: [0]=Ancho, [4]=Alto, [8]=BPP, [12]=LineLen
-    screen_info resd 4      
-    text_buf    resb 16
+    mi_pantalla resb ScreenInfo_size   ; Estructura para recibir los datos
+
+; ------------------------------------------------------------------------------
+; SECCIÓN DATA (Datos inicializados - MÁS SEGURO)
+; ------------------------------------------------------------------------------
+section .data
+    msg_titulo db "--- INFO PANTALLA ---", 10, 0
+    msg_ancho  db "Ancho (xres): ", 0
+    msg_alto   db "Alto  (yres): ", 0
+    msg_bpp    db "BPP:          ", 0
+    msg_pitch  db "LineLength:   ", 0
+    newline    db 10, 0
+    
+    ; ¡TRUCO! Inicializamos el buffer con ceros aquí para asegurar que la memoria existe.
+    ; Reservamos 32 bytes llenos de ceros.
+    buffer_num times 32 db 0 
 
 section .text
     global _start
 
 _start:
-    ; 1. LLAMAR A LA LIBRERÍA
-    lea rdi, [screen_info]
+    ; 1. OBTENER INFORMACIÓN
+    lea rdi, [mi_pantalla]
     call lib_graph_get_info
-
+    
     cmp rax, 0
     jl .error
 
-    ; --------------------------------------------------------------------------
-    ; 2. MOSTRAR DATOS UNO POR UNO
-    ; --------------------------------------------------------------------------
+    ; 2. IMPRIMIR TÍTULO
+    lea rsi, [msg_titulo]
+    call _print_str
 
-    ; --- DATO 1: ANCHO (Offset 0) ---
-    lea rsi, [txt_w]        ; Etiqueta
+    ; 3. IMPRIMIR ANCHO
+    lea rsi, [msg_ancho]
     call _print_str
     
-    mov esi, [screen_info]  ; Valor
-    call _print_num_ln      ; Imprimir número + enter
-
-    ; --- DATO 2: ALTO (Offset 4) ---
-    lea rsi, [txt_h]
-    call _print_str
-    
-    mov esi, [screen_info + 4] ; Desplazamos 4 bytes
+    mov edi, [mi_pantalla + ScreenInfo.width]
     call _print_num_ln
 
-    ; --- DATO 3: BITS POR PIXEL (Offset 8) ---
-    lea rsi, [txt_bpp]
+    ; 4. IMPRIMIR ALTO
+    lea rsi, [msg_alto]
     call _print_str
     
-    mov esi, [screen_info + 8] ; Desplazamos 8 bytes
+    mov edi, [mi_pantalla + ScreenInfo.height]
     call _print_num_ln
 
-    ; --- DATO 4: LINE LENGTH (Offset 12) ---
-    ; ¡Este dato es vital! Es el ancho REAL en memoria (puede ser mayor al ancho visible)
-    lea rsi, [txt_len]
+    ; 5. IMPRIMIR BPP
+    lea rsi, [msg_bpp]
     call _print_str
     
-    mov esi, [screen_info + 12] ; Desplazamos 12 bytes
+    mov edi, [mi_pantalla + ScreenInfo.bpp]
     call _print_num_ln
 
-    ; SALIR
-    mov rax, SYS_EXIT
+    ; 6. IMPRIMIR PITCH (LINELENGTH)
+    lea rsi, [msg_pitch]
+    call _print_str
+    
+    mov edi, [mi_pantalla + ScreenInfo.pitch]
+    call _print_num_ln
+
+    ; SALIR (ÉXITO)
+    mov rax, 60         ; SYS_EXIT
     xor rdi, rdi
     syscall
 
 .error:
-    ; Si falla, devolvemos 1
-    mov rax, SYS_EXIT
+    ; SALIR (ERROR)
+    mov rax, 60
     mov rdi, 1
     syscall
 
 ; ==============================================================================
-; RUTINAS AUXILIARES
+; RUTINAS AUXILIARES ROBUSTAS
 ; ==============================================================================
 
-; Imprime el número en ESI seguido de un salto de línea
-_print_num_ln:
-    lea rdi, [text_buf]
-    mov edx, 10
-    call lib_cnv_uint32_to_str
-    
-    lea rsi, [text_buf]
-    call _print_str
-    
-    lea rsi, [newline]
-    call _print_str
-    ret
-
-; Imprime cadena terminada en 0
+; --- _print_str: Imprime hasta encontrar un 0 ---
 _print_str:
     push rax
     push rdi
     push rdx
-    push rsi                ; Guardamos RSI porque lo modificamos
-    
-    ; Calcular longitud (strlen rápido)
-    xor rdx, rdx
-.loop:
+    push rcx
+    push rsi            ; Guardamos RSI por seguridad
+
+    ; Calcular longitud (strlen)
+    xor rdx, rdx        ; RDX = 0
+.len_loop:
     cmp byte [rsi+rdx], 0
-    je .print
+    je .do_write
     inc rdx
-    jmp .loop
-.print:
-    mov rax, SYS_WRITE
-    mov rdi, STDOUT
-    syscall
+    jmp .len_loop
+
+.do_write:
+    test rdx, rdx       ; Si longitud es 0, no imprimimos nada
+    jz .exit_print
     
+    mov rax, 1          ; SYS_WRITE
+    mov rdi, 1          ; STDOUT
+    ; RSI ya apunta al string
+    ; RDX ya tiene la longitud
+    syscall
+
+.exit_print:
     pop rsi
+    pop rcx
     pop rdx
     pop rdi
+    pop rax
+    ret
+
+; --- _print_num_ln: Convierte EDI a texto y lo imprime + Enter ---
+_print_num_ln:
+    push rax
+    push rbx
+    push rcx
+    push rdx
+    push rsi
+    push rdi
+
+    mov eax, edi                ; Número a convertir
+    
+    ; Usamos el buffer en .data (buffer_num)
+    ; Apuntamos al final del buffer (byte 30) para escribir hacia atrás
+    lea rsi, [buffer_num + 30]  
+    mov byte [rsi], 0           ; Terminador nulo al final
+    
+    mov ebx, 10                 ; Divisor
+
+.convert_loop:
+    xor edx, edx                ; Limpiar parte alta para división
+    div ebx                     ; EAX / 10 -> Cociente EAX, Resto EDX
+    
+    add dl, '0'                 ; Convertir número a ASCII
+    dec rsi                     ; Retroceder en el buffer
+    mov [rsi], dl               ; Guardar letra
+    
+    test eax, eax               ; ¿Queda número?
+    jnz .convert_loop           ; Si no es 0, repetir
+
+    ; Ahora RSI apunta al principio del número generado. Imprimimos.
+    call _print_str
+    
+    ; Imprimir salto de línea
+    lea rsi, [newline]
+    call _print_str
+
+    pop rdi
+    pop rsi
+    pop rdx
+    pop rcx
+    pop rbx
     pop rax
     ret
 
