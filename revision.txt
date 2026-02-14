@@ -107,145 +107,116 @@ EXIT_SUCCESS equ 0
 
 
 ==============================================================================
- RUTA: ./lib/text/print_bin32/lib_text_print_bin32.asm
+ RUTA: ./lib/graph/lib_graph_get_info.asm
 ==============================================================================
 ; ==============================================================================
-; RUTA: ./lib/text/print_bin32/lib_text_print_bin32.asm
-; DESCRIPCIÓN: Imprime representación binaria (32 bits).
+; RUTA: ./lib/graph/lib_graph_get_info.asm
+; ESTRATEGIA: Híbrida.
+; 1. Preguntamos al driver la Resolución y BPP (Extracción).
+; 2. Calculamos el LineLength matemáticamente (Cálculo).
+;    Esto evita el error "518" causado por leer mal la estructura fija.
 ; ==============================================================================
 
-%include "constants.inc"
+%include "lib/constants.inc"
+
+; Solo necesitamos la info variable para saber el tamaño
+FBIOGET_VSCREENINFO equ 0x4600  
 
 default rel
-section .text
-    global lib_text_print_bin32
 
-lib_text_print_bin32:
+section .text
+    global lib_graph_get_info
+
+lib_graph_get_info:
     push rbp
     mov rbp, rsp
+    push rbx
+    push rdi            ; Guardar puntero destino
+
+    ; 1. ABRIR /dev/fb0
+    mov rax, 2          ; SYS_OPEN
+    lea rdi, [rel .dev_fb]
+    mov rsi, 0          ; O_RDONLY
+    syscall
     
-    ; Reservamos 40 bytes (32 bits + salto + padding extra)
-    ; Nota: 40 no es múltiplo de 16, pero + push rbx (8) = 48 (Ok alineado)
-    sub rsp, 40         
+    cmp rax, 0
+    jl .error_open
+    mov rbx, rax        ; Guardar File Descriptor
 
-    push rbx            
-    mov ebx, edi        
-    mov rcx, 32         
-    lea rsi, [rsp + 8]  
+    ; 2. RESERVAR MEMORIA EN PILA (Solo para var_info es suficiente, 160 bytes)
+    sub rsp, 160        
 
-.bucle_bits:
-    rol ebx, 1          
-    jc .es_uno
-    mov byte [rsi], '0'
-    jmp .siguiente
-.es_uno:
-    mov byte [rsi], '1'
-.siguiente:
-    inc rsi
-    dec rcx
-    jnz .bucle_bits
-
-    mov byte [rsi], 10  ; Salto de línea
+    ; 3. PEDIR DATOS DE RESOLUCIÓN (Ancho, Alto, BPP)
+    mov rax, 16         ; SYS_IOCTL
+    mov rdi, rbx
+    mov rsi, FBIOGET_VSCREENINFO
+    mov rdx, rsp        ; Puntero a la pila
+    syscall
     
-    ; Usando constantes para mayor claridad
-    mov rax, SYS_WRITE  
-    mov rdi, STDOUT     
-    lea rsi, [rsp + 8]  
-    mov rdx, 33         
+    test rax, rax
+    jnz .error_ioctl
+
+    ; 4. LEER Y CALCULAR
+    ; Leemos lo que nos dijo el driver:
+    mov r8d,  [rsp]         ; Ancho (xres) -> 1920
+    mov r9d,  [rsp + 4]     ; Alto (yres)  -> 1080
+    mov r10d, [rsp + 24]    ; BPP          -> 32
+
+    ; --- AQUÍ ESTÁ EL TRUCO ---
+    ; En lugar de leer el offset 48 de la otra estructura (que da 518 por error),
+    ; calculamos el LineLength nosotros.
+    ; FÓRMULA: LineLength = Ancho * (BPP / 8)
+    
+    mov r11d, r10d      ; R11D = 32
+    shr r11d, 3         ; R11D = 32 / 8 = 4 (Bytes por pixel)
+    imul r11d, r8d      ; R11D = 4 * 1920 = 7680
+    
+    ; Ahora R11D contiene 7680 garantizado.
+    ; ---------------------------
+
+    ; 5. LIMPIEZA
+    add rsp, 160        ; Liberar pila
+    mov rax, 3          ; SYS_CLOSE
+    mov rdi, rbx
     syscall
 
-    pop rbx             
-    add rsp, 40         
-    leave
-    ret
-
-
-==============================================================================
- RUTA: ./lib/text/print_bin32/lib_text_print_bin32.inc
-==============================================================================
-extern lib_text_print_bin32
-
-
-==============================================================================
- RUTA: ./lib/text/print_dec32/lib_text_print_dec32.asm
-==============================================================================
-; ==============================================================================
-; RUTA: ./lib/text/print_dec32/lib_text_print_dec32.asm
-; DESCRIPCIÓN: Imprime entero 32 bits con signo.
-; ENTRADA:  EDI = Número a imprimir
-; DESTRUYE: RAX, RCX, RDX, RSI, R11 (Estándar Syscall)
-; ==============================================================================
-
-%include "constants.inc"
-
-default rel
-section .text
-    global lib_text_print_dec32
-
-lib_text_print_dec32:
-    push rbp
-    mov rbp, rsp
-
-    ; --------------------------------------------------------------------------
-    ; ALINEACIÓN DE STACK (Mejora de seguridad)
-    ; --------------------------------------------------------------------------
-    ; Reservamos 32 bytes en lugar de 24.
-    ; 32 es múltiplo de 16, manteniendo el stack alineado para llamadas futuras.
-    sub rsp, 32 
+    pop rdi             ; Recuperar puntero del usuario
     
-    push rbx            ; Guardar registro protegido (RBX debe preservarse)
+    ; 6. ESCRIBIR RESULTADOS EN TU BUFFER
+    mov [rdi], r8d      ; Ancho
+    mov [rdi + 4], r9d  ; Alto
+    mov [rdi + 8], r10d ; BPP
+    mov [rdi + 12], r11d ; LineLength (El calculado: 7680)
 
-    ; Apuntamos al final del buffer reservado (RSP + 32 bytes)
-    lea rsi, [rsp + 32] 
-    dec rsi
-    mov byte [rsi], 10  ; Ponemos el \n al final
-    dec rsi
+    xor rax, rax        ; Return 0 (Éxito)
+    jmp .fin
 
-    mov eax, edi        ; Argumento
-    xor ebx, ebx        ; Flag de signo (0 = pos)
-
-    test eax, eax
-    jns .conversion
-    neg eax             ; Hacer positivo
-    mov ebx, 1          ; Marcar como negativo
-
-.conversion:
-    mov ecx, 10
-.bucle:
-    xor edx, edx
-    div ecx             ; EAX / 10
-    add dl, '0'
-    mov [rsi], dl
-    dec rsi
-    test eax, eax
-    jnz .bucle
-
-    cmp ebx, 1
-    jne .imprimir
-    mov byte [rsi], '-'
-    dec rsi
-
-.imprimir:
-    inc rsi             ; Corregir puntero al inicio real
-
-    ; Calcular longitud: (Fin del buffer) - (Inicio actual)
-    lea rdx, [rsp + 32] ; ¡OJO! Aquí también usamos 32 ahora
-    sub rdx, rsi        
-    
-    mov rax, SYS_WRITE  ; Usando constante
-    mov rdi, STDOUT     ; Usando constante
+.error_ioctl:
+    add rsp, 160
+    mov rax, 3
+    mov rdi, rbx
     syscall
+    pop rdi
+    mov rax, -1
+    jmp .fin
 
+.error_open:
+    pop rdi
+    mov rax, -1
+
+.fin:
     pop rbx
-    add rsp, 32         ; Liberamos los 32 bytes
     leave
     ret
 
+section .data
+    .dev_fb db "/dev/fb0", 0
+
 
 ==============================================================================
- RUTA: ./lib/text/print_dec32/lib_text_print_dec32.inc
+ RUTA: ./lib/graph/lib_graph_get_info.inc
 ==============================================================================
-extern lib_text_print_dec32
+extern lib_graph_get_info
 
 
 ==============================================================================
@@ -385,139 +356,127 @@ _start:
 
 
 ==============================================================================
- RUTA: ./proyectos/main/main.asm
+ RUTA: ./proyectos/graph/main.asm
 ==============================================================================
 ; ==============================================================================
-; RUTA: ./proyectos/main/main.asm
-; DESCRIPCIÓN: Prueba de conversión multibase (Base 10, Base 2, Base 16).
+; RUTA: ./proyectos/graph/main.asm
+; DESCRIPCIÓN: Muestra TODA la info de la pantalla (Ancho, Alto, BPP, LineLen)
 ; ==============================================================================
 
 %include "lib/constants.inc"
 %include "lib/cnv/lib_cnv_uint32_to_str.inc"
 
+extern lib_graph_get_info
+
 default rel
 
 section .data
-    ; Mensajes para identificar cada prueba
-    msg_titulo  db "--- Prueba Multi-Base (Numero: 305419896) ---", 10, 0
-    
-    lbl_dec     db "Base 10 (Decimal): ", 0
-    lbl_bin     db "Base  2 (Binario): ", 0
-    lbl_hex     db "Base 16 (Hex):     ", 0
-    
-    newline     db 10
+    txt_w       db "Ancho:      ", 0
+    txt_h       db "Alto:       ", 0
+    txt_bpp     db "BPP:        ", 0
+    txt_len     db "LineLength: ", 0
+    newline     db 10, 0
 
 section .bss
-    ; IMPORTANTE: Para binario necesitamos hasta 32 caracteres + 1 nulo.
-    ; Reservamos 64 bytes para estar sobrados y alineados.
-    buffer_num  resb 64
+    ; Estructura: [0]=Ancho, [4]=Alto, [8]=BPP, [12]=LineLen
+    screen_info resd 4      
+    text_buf    resb 16
 
 section .text
     global _start
 
 _start:
-    ; 1. Imprimir Título
-    lea rsi, [msg_titulo]
-    call _print_fixed_str
+    ; 1. LLAMAR A LA LIBRERÍA
+    lea rdi, [screen_info]
+    call lib_graph_get_info
 
-    ; Número de prueba: 305419896 (Equivale a 0x12345678)
-    ; Usaremos R12 para guardar el número y no perderlo entre llamadas
-    mov r12d, 305419896
+    cmp rax, 0
+    jl .error
 
     ; --------------------------------------------------------------------------
-    ; PRUEBA 1: DECIMAL (Base 10)
+    ; 2. MOSTRAR DATOS UNO POR UNO
     ; --------------------------------------------------------------------------
-    lea rsi, [lbl_dec]      ; Imprimir etiqueta "Decimal: "
-    call _print_fixed_str
+
+    ; --- DATO 1: ANCHO (Offset 0) ---
+    lea rsi, [txt_w]        ; Etiqueta
+    call _print_str
     
-    lea rdi, [buffer_num]   ; Buffer
-    mov esi, r12d           ; Número
-    mov edx, 10             ; BASE 10 <---
-    call lib_cnv_uint32_to_str
+    mov esi, [screen_info]  ; Valor
+    call _print_num_ln      ; Imprimir número + enter
+
+    ; --- DATO 2: ALTO (Offset 4) ---
+    lea rsi, [txt_h]
+    call _print_str
     
-    call _print_buffer_result ; Imprimir resultado
+    mov esi, [screen_info + 4] ; Desplazamos 4 bytes
+    call _print_num_ln
 
-    ; --------------------------------------------------------------------------
-    ; PRUEBA 2: BINARIO (Base 2)
-    ; --------------------------------------------------------------------------
-    lea rsi, [lbl_bin]      ; Imprimir etiqueta "Binario: "
-    call _print_fixed_str
+    ; --- DATO 3: BITS POR PIXEL (Offset 8) ---
+    lea rsi, [txt_bpp]
+    call _print_str
+    
+    mov esi, [screen_info + 8] ; Desplazamos 8 bytes
+    call _print_num_ln
 
-    lea rdi, [buffer_num]   ; Buffer (reutilizamos)
-    mov esi, r12d           ; Número
-    mov edx, 2              ; BASE 2 <---
-    call lib_cnv_uint32_to_str
+    ; --- DATO 4: LINE LENGTH (Offset 12) ---
+    ; ¡Este dato es vital! Es el ancho REAL en memoria (puede ser mayor al ancho visible)
+    lea rsi, [txt_len]
+    call _print_str
+    
+    mov esi, [screen_info + 12] ; Desplazamos 12 bytes
+    call _print_num_ln
 
-    call _print_buffer_result
-
-    ; --------------------------------------------------------------------------
-    ; PRUEBA 3: HEXADECIMAL (Base 16)
-    ; --------------------------------------------------------------------------
-    lea rsi, [lbl_hex]      ; Imprimir etiqueta "Hex: "
-    call _print_fixed_str
-
-    lea rdi, [buffer_num]
-    mov esi, r12d
-    mov edx, 16             ; BASE 16 <---
-    call lib_cnv_uint32_to_str
-
-    call _print_buffer_result
-
-    ; Salir
+    ; SALIR
     mov rax, SYS_EXIT
     xor rdi, rdi
     syscall
 
+.error:
+    ; Si falla, devolvemos 1
+    mov rax, SYS_EXIT
+    mov rdi, 1
+    syscall
+
 ; ==============================================================================
-; SUBRUTINAS AUXILIARES (Para no repetir código en el main)
+; RUTINAS AUXILIARES
 ; ==============================================================================
 
-; --------------------------------------------------------------------------
-; _print_buffer_result:
-; Calcula la longitud de la cadena en 'buffer_num', la imprime y añade un \n
-; --------------------------------------------------------------------------
-_print_buffer_result:
-    lea rsi, [buffer_num]   ; Apuntamos al buffer
-    call _strlen            ; Calculamos longitud en RDX
+; Imprime el número en ESI seguido de un salto de línea
+_print_num_ln:
+    lea rdi, [text_buf]
+    mov edx, 10
+    call lib_cnv_uint32_to_str
     
-    mov rax, SYS_WRITE
-    mov rdi, STDOUT
-    syscall                 ; RSI ya tiene el buffer, RDX la longitud
-
-    ; Imprimir nueva línea
-    mov rax, SYS_WRITE
-    mov rdi, STDOUT
+    lea rsi, [text_buf]
+    call _print_str
+    
     lea rsi, [newline]
-    mov rdx, 1
-    syscall
+    call _print_str
     ret
 
-; --------------------------------------------------------------------------
-; _print_fixed_str:
-; Imprime una cadena fija terminada en 0 apuntada por RSI
-; --------------------------------------------------------------------------
-_print_fixed_str:
-    push rsi                ; Guardamos RSI original
-    call _strlen            ; RDX = Longitud
-    pop rsi                 ; Recuperamos inicio de cadena
-    mov rax, SYS_WRITE
-    mov rdi, STDOUT
-    syscall
-    ret
-
-; --------------------------------------------------------------------------
-; _strlen:
-; Entrada: RSI apunta a cadena terminada en 0
-; Salida:  RDX contiene la longitud
-; --------------------------------------------------------------------------
-_strlen:
-    xor rdx, rdx            ; Contador a 0
+; Imprime cadena terminada en 0
+_print_str:
+    push rax
+    push rdi
+    push rdx
+    push rsi                ; Guardamos RSI porque lo modificamos
+    
+    ; Calcular longitud (strlen rápido)
+    xor rdx, rdx
 .loop:
-    cmp byte [rsi + rdx], 0 ; ¿Es fin de cadena?
-    je .done
+    cmp byte [rsi+rdx], 0
+    je .print
     inc rdx
     jmp .loop
-.done:
+.print:
+    mov rax, SYS_WRITE
+    mov rdi, STDOUT
+    syscall
+    
+    pop rsi
+    pop rdx
+    pop rdi
+    pop rax
     ret
 
 
