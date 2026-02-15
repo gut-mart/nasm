@@ -1,100 +1,145 @@
 
-# 📘 Documentación: Librería de Conversión Entero a Cadena (`lib_cnv_uint32_to_str`)
-
-Esta librería convierte un número entero de 32 bits sin signo (UInt32) en su representación de cadena de caracteres (ASCII) decimal, terminada en nulo. Es esencial para imprimir valores numéricos en pantalla o consola.
 
 ---
 
-## 🔌 Especificación de Interfaz de Datos (I/O)
+# 📘 Documentación: Conversión Numérica (`lib_cnv_uint32_to_str`)
 
-La función principal es `lib_cnv_uint32_to_str`. A continuación se detallan los requisitos exactos de entrada y el estado de salida.
+**Archivo:** `lib/cnv/lib_cnv_uint32_to_str.asm`
 
-### 1. Entrada de Datos (Input)
-
-La función espera recibir **dos argumentos** en los registros `RDI` y `RSI` antes de ser llamada.
-
-#### Registro 1: `RDI` (El Número)
-
-* **Tipo:** Entero de 32 bits sin signo (UInt32).
-* **Descripción:** El valor numérico que deseas convertir a texto.
-* **Rango:** `0` a `4,294,967,295` (0xFFFFFFFF).
-* **Nota:** Aunque el registro es de 64 bits, solo se consideran los 32 bits inferiores (`EDI`).
-
-#### Registro 2: `RSI` (El Buffer)
-
-* **Tipo:** Puntero (Dirección de memoria de 64 bits).
-* **Descripción:** Dirección de memoria donde la función escribirá los caracteres ASCII resultantes.
-* **Requisito de Memoria:** El buffer apuntado debe tener **al menos 11 bytes** de espacio reservado (10 dígitos máximos para un UInt32 + 1 byte para el terminador nulo).
+Esta librería proporciona una función robusta y optimizada en ensamblador x86_64 para convertir números enteros de 32 bits sin signo (UInt32) a cadenas de texto ASCII (terminadas en nulo). Su característica principal es que permite **especificar cualquier base numérica** para la conversión (Decimal, Hexadecimal, Binario, Octal, etc.).
 
 ---
 
-### 2. Salida de Datos (Output)
+## ⚙️ API de la Función
 
-La función no devuelve valores en registros (como `RAX`), sino que su "salida" es la modificación de la memoria apuntada por `RSI`.
+### Firma
 
-#### A. Modificación de Memoria (Buffer ASCII)
+`lib_cnv_uint32_to_str`
 
-La función escribe en la dirección `[RSI]` la cadena de texto que representa el número.
+### 📥 Entradas (Inputs)
 
-* **Formato:** ASCII decimal.
-* **Terminación:** Agrega un byte `0x00` (NULL) al final de la cadena.
-* **Longitud:** Variable (depende del número).
-* Si `RDI` = 0 -> Escribe `"0"` + `0x00` (2 bytes).
-* Si `RDI` = 123 -> Escribe `"123"` + `0x00` (4 bytes).
-* Si `RDI` = 4294967295 -> Escribe `"4294967295"` + `0x00` (11 bytes).
+Antes de llamar a la función con `call`, se deben configurar los siguientes registros:
 
+| Registro | Descripción | Detalles |
+| --- | --- | --- |
+| **`RDI`** | **Puntero al Buffer** | Dirección de memoria donde se escribirá el resultado. **Debe tener espacio reservado suficiente**. |
+| **`ESI`** | **Número (UInt32)** | El valor entero a convertir. Aunque el registro es de 64 bits, solo se procesan los 32 bits bajos. |
+| **`EDX`** | **Base Numérica** | La base del sistema numérico deseado. <br>
 
+<br>• Ejemplos: `10` (Decimal), `16` (Hex), `2` (Binario).<br>
 
-#### B. Registros Modificados (Volátiles)
+<br>• *Nota:* Si `EDX < 2`, la función fuerza automáticamente Base 10. |
 
-Es crucial saber qué registros cambian tras la llamada:
+### 📤 Salidas (Outputs)
 
-* **Destruidos (No confiar en su valor):** `RAX`, `RCX`, `RDX`.
-* `RAX`: Usado para la división.
-* `RDX`: Usado para el resto (módulo).
-* `RCX`: Usado como contador interno o temporal.
+Tras la ejecución (`ret`):
 
-
-* **Preservados (Seguros):** `RBX`, `RBP`, `RSP`, `R12`-`R15`.
+| Registro | Descripción |
+| --- | --- |
+| **`RAX`** | Devuelve el **puntero al inicio de la cadena** (el mismo valor que se pasó en `RDI`). Útil para encadenar operaciones. |
+| **Memoria** | El buffer apuntado por `RDI` contiene ahora la cadena de texto seguida de un byte `0x00`. |
 
 ---
 
-### 3. Diagrama de Flujo de Datos
+## 🛡️ Gestión de Registros y Stack
 
-```text
-       ENTRADAS                                SALIDA (Memoria en RSI)
-    +-----------------+                     +---------------------------+
-    | RDI = 7680      |                     | Byte 0: '7' (0x37)        |
-    | (Número entero) |   ------------->    | Byte 1: '6' (0x36)        |
-    +-----------------+      FUNCIÓN        | Byte 2: '8' (0x38)        |
-                                            | Byte 3: '0' (0x30)        |
-    +-----------------+                     | Byte 4: 0   (0x00) NULL   |
-    | RSI = 0x402000  |                     +---------------------------+
-    | (Puntero Buffer)|
-    +-----------------+
+* **Registros Preservados:** La función respeta la convención de llamada (ABI). Guarda y restaura `RBX`, `RBP`, `RSP`, `R12`, `R13`, `R14`, `R15`.
+* **Registros Volátiles:** `RCX`, `RDX`, `R8`, `R9`, `R10`, `R11` pueden cambiar su valor.
+* **Stack Frame:** Utiliza `RBP` para gestionar la pila de forma segura. Implementa una corrección técnica (`mov rdi, [rbp - 16]`) para recuperar el puntero del buffer sin corromper la pila durante la inversión de dígitos.
+
+---
+
+## 📏 Requisitos de Memoria (Buffer)
+
+Es responsabilidad del programador reservar suficiente espacio en `RDI` para evitar desbordamientos de buffer (*buffer overflow*).
+
+| Base | Dígitos Máximos (UInt32) | Terminador Nulo | **Tamaño Mínimo Recomendado** |
+| --- | --- | --- | --- |
+| **Binario (Base 2)** | 32 | +1 byte | **33 bytes** |
+| **Octal (Base 8)** | 11 | +1 byte | **12 bytes** |
+| **Decimal (Base 10)** | 10 | +1 byte | **11 bytes** |
+| **Hexadecimal (Base 16)** | 8 | +1 byte | **9 bytes** |
+
+---
+
+## 🚀 Ejemplos de Uso
+
+### 1. Conversión a Decimal (Estándar)
+
+```nasm
+section .bss
+    buffer_dec resb 12
+
+section .text
+    extern lib_cnv_uint32_to_str
+
+_imprimir_numero:
+    lea rdi, [buffer_dec]   ; Destino
+    mov esi, 12345          ; Número
+    mov edx, 10             ; Base 10
+    call lib_cnv_uint32_to_str
+    
+    ; Ahora [buffer_dec] contiene "12345", 0
+
+```
+
+### 2. Conversión a Hexadecimal (Base 16)
+
+```nasm
+section .bss
+    buffer_hex resb 10
+
+section .text
+_imprimir_hex:
+    lea rdi, [buffer_hex]
+    mov esi, 0x1A2B
+    mov edx, 16             ; Base 16
+    call lib_cnv_uint32_to_str
+    
+    ; Resultado: "1A2B", 0
+
+```
+
+### 3. Conversión a Binario (Base 2)
+
+```nasm
+section .bss
+    buffer_bin resb 33      ; ¡Importante reservar 33 bytes!
+
+section .text
+_imprimir_bin:
+    lea rdi, [buffer_bin]
+    mov esi, 5
+    mov edx, 2              ; Base 2
+    call lib_cnv_uint32_to_str
+    
+    ; Resultado: "101", 0
 
 ```
 
 ---
 
-### 4. Ejemplo de Implementación
+## 🔧 Integración en Proyectos
 
+Para usar esta librería en tu proyecto NASM:
+
+1. Asegúrate de que el archivo `lib_cnv_uint32_to_str.asm` está en tu ruta de librerías.
+2. En tu archivo principal (`main.asm`):
 ```nasm
-section .bss
-    buffer_texto resb 32  ; Reservamos espacio suficiente
+extern lib_cnv_uint32_to_str
 
-section .text
-    extern lib_cnv_uint32_to_str
+```
 
-_start:
-    ; 1. Cargar el número a convertir
-    mov edi, 7680         ; Entrada 1: El número
 
-    ; 2. Cargar la dirección del buffer destino
-    lea rsi, [buffer_texto] ; Entrada 2: El puntero
+3. Al compilar y enlazar (Makefile):
+```bash
+# Compilar librería
+nasm -f elf64 lib/cnv/lib_cnv_uint32_to_str.asm -o lib_cnv.o
 
-    ; 3. Llamar a la librería
-    call lib_cnv_uint32_to_str
+# Compilar main
+nasm -f elf64 main.asm -o main.o
 
-    ; AHORA: [buffer_texto] contiene "7680", 0
+# Enlazar
+ld -o programa main.o lib_cnv.o
 
+```

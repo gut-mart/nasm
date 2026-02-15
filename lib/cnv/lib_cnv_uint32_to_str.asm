@@ -1,5 +1,5 @@
 ; ==============================================================================
-; RUTA: ./lib/text/cnv_uint32_to_str/lib_cnv_uint32_to_str.asm
+; RUTA: ./lib/cnv/lib_cnv_uint32_to_str.asm
 ; DESCRIPCIÓN: Convierte un uint32 a string en la BASE especificada.
 ;
 ; ENTRADA:
@@ -8,7 +8,7 @@
 ;   EDX = Base numérica (Ej: 10 para Decimal, 2 para Binario, 16 para Hex)
 ;
 ; SALIDA:
-;   RAX = Puntero al inicio de la cadena (el mismo que RDI)
+;   RAX = Puntero al inicio de la cadena (el mismo que RDI original)
 ;   El buffer en RDI contendrá la cadena terminada en 0.
 ; ==============================================================================
 
@@ -17,59 +17,70 @@ section .text
     global lib_cnv_uint32_to_str
 
 lib_cnv_uint32_to_str:
+    ; --- PRÓLOGO STANDARD ---
     push rbp
     mov rbp, rsp
-    sub rsp, 16         ; Alineación
-
-    push rbx            ; Guardamos registros protegidos
-    push rdi            ; Guardamos el puntero inicial para devolverlo después
-
-    ; Validación básica de la base (opcional, pero recomendada)
-    ; Si la base es 0 o 1, forzamos base 10 para evitar bucles infinitos o crash
-    cmp edx, 2
-    jge .inicio
-    mov edx, 10         ; Base por defecto si la entrada es inválida
-
-.inicio:
-    mov eax, esi        ; Número a convertir (Dividendo)
-    mov ecx, edx        ; Base (Divisor) - Movemos de EDX a ECX para usarlo en div
-    xor ebx, ebx        ; Contador de dígitos apilados
-
-.bucle_division:
-    xor edx, edx        ; Limpiar parte alta para la división (EDX:EAX)
-    div ecx             ; EAX / Base --> EAX=Cociente, EDX=Resto
     
-    ; Convertir el resto (0..Base-1) a ASCII
-    cmp edx, 9
-    jg .es_letra        ; Si es > 9 (para Hex), saltamos a letras
+    push rbx            ; Guardamos RBX (Callee-saved)
+    push rdi            ; Guardamos RDI (Buffer). 
+                        ; En la pila: [RBP] -> [RBX] -> [RDI]
+                        ; Por tanto, RDI está en [RBP - 16]
 
-    add edx, '0'        ; 0-9 -> '0'-'9'
+    ; --- VALIDACIÓN DE BASE ---
+    cmp edx, 2
+    jge .preparar
+    mov edx, 10         ; Si base < 2, forzar base 10
+
+.preparar:
+    mov eax, esi        ; EAX = Número a convertir (Dividendo)
+    mov r8d, edx        ; R8D = Base (Divisor). Usamos R8 porque DIV destruye RDX
+    xor ebx, ebx        ; EBX = Contador de dígitos
+
+    ; --- BUCLE DE DIVISIÓN ---
+.bucle_division:
+    xor edx, edx        ; Limpiar parte alta (EDX:EAX)
+    div r8d             ; EAX / Base --> Cociente en EAX, Resto en EDX
+    
+    ; Convertir resto a ASCII
+    cmp edx, 9
+    ja .es_letra        ; Si es > 9 (Hexadecimal)
+
+    add edx, '0'        ; 0-9 -> ASCII
     jmp .push_digito
 
 .es_letra:
-    add edx, 'A' - 10   ; 10-15 -> 'A'-'F' (Útil si usas base 16)
+    add edx, 'A' - 10   ; 10-35 -> 'A'-'Z'
 
 .push_digito:
     push rdx            ; Guardamos el carácter en la pila
-    inc ebx             ; Incrementamos contador
+    inc ebx             ; Aumentamos contador
     
-    test eax, eax       ; ¿El cociente es 0?
-    jnz .bucle_division ; Si no, seguimos dividiendo
+    test eax, eax       ; ¿Queda número?
+    jnz .bucle_division ; Si cociente != 0, repetir
 
-    ; Recuperar caracteres de la pila al buffer
-    ; RDI ya apunta al inicio del buffer
+    ; --- RECUPERACIÓN (CORRECCIÓN DEL ERROR) ---
+    ; NO hacemos 'pop rdi' aquí porque la pila está llena de dígitos.
+    ; Leemos el valor original directamente usando RBP.
+    
+    mov rdi, [rbp - 16] ; Recuperamos la dirección inicial del buffer
+    mov rax, rdi        ; Preparamos valor de retorno
+
+    ; --- BUCLE DE ESCRITURA ---
 .escribir:
-    pop rdx
-    mov [rdi], dl
-    inc rdi
-    dec ebx
-    jnz .escribir
+    pop rdx             ; Sacamos un dígito de la pila
+    mov [rdi], dl       ; Escribimos en el buffer
+    inc rdi             ; Avanzamos puntero del buffer
+    dec ebx             ; Decrementamos contador
+    jnz .escribir       ; Si quedan dígitos, repetir
 
-    mov byte [rdi], 0   ; Terminador nulo
+    mov byte [rdi], 0   ; Terminador nulo al final
 
-    pop rax             ; Restauramos el puntero original en RAX (Return value)
-    pop rbx             ; Restauramos RBX
+    ; --- EPÍLOGO ---
+    ; La pila ahora tiene [RBX] y [RDI] guardados.
+    ; Los dígitos ya se fueron.
     
-    mov rsp, rbp
-    pop rbp
+    pop rdi             ; Limpiamos el RDI que guardamos al principio
+    pop rbx             ; Restauramos el RBX original
+    
+    leave               ; Restaura RSP y RBP
     ret
