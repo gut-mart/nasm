@@ -9,7 +9,7 @@ build/
 .DS_Store
 *.swp
 *~
-*.txt
+revision.txt
 # 4. Ignorar la carpeta de configuración local de VS Code (opcional pero recomendado)
 .vscode/
 
