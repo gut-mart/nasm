@@ -2,7 +2,7 @@
  RUTA: ./lib/cnv/lib_cnv_uint32_to_str.asm
 ==============================================================================
 ; ==============================================================================
-; RUTA: ./lib/text/cnv_uint32_to_str/lib_cnv_uint32_to_str.asm
+; RUTA: ./lib/cnv/lib_cnv_uint32_to_str.asm
 ; DESCRIPCIÓN: Convierte un uint32 a string en la BASE especificada.
 ;
 ; ENTRADA:
@@ -11,7 +11,7 @@
 ;   EDX = Base numérica (Ej: 10 para Decimal, 2 para Binario, 16 para Hex)
 ;
 ; SALIDA:
-;   RAX = Puntero al inicio de la cadena (el mismo que RDI)
+;   RAX = Puntero al inicio de la cadena (el mismo que RDI original)
 ;   El buffer en RDI contendrá la cadena terminada en 0.
 ; ==============================================================================
 
@@ -20,61 +20,72 @@ section .text
     global lib_cnv_uint32_to_str
 
 lib_cnv_uint32_to_str:
+    ; --- PRÓLOGO STANDARD ---
     push rbp
     mov rbp, rsp
-    sub rsp, 16         ; Alineación
-
-    push rbx            ; Guardamos registros protegidos
-    push rdi            ; Guardamos el puntero inicial para devolverlo después
-
-    ; Validación básica de la base (opcional, pero recomendada)
-    ; Si la base es 0 o 1, forzamos base 10 para evitar bucles infinitos o crash
-    cmp edx, 2
-    jge .inicio
-    mov edx, 10         ; Base por defecto si la entrada es inválida
-
-.inicio:
-    mov eax, esi        ; Número a convertir (Dividendo)
-    mov ecx, edx        ; Base (Divisor) - Movemos de EDX a ECX para usarlo en div
-    xor ebx, ebx        ; Contador de dígitos apilados
-
-.bucle_division:
-    xor edx, edx        ; Limpiar parte alta para la división (EDX:EAX)
-    div ecx             ; EAX / Base --> EAX=Cociente, EDX=Resto
     
-    ; Convertir el resto (0..Base-1) a ASCII
-    cmp edx, 9
-    jg .es_letra        ; Si es > 9 (para Hex), saltamos a letras
+    push rbx            ; Guardamos RBX (Callee-saved)
+    push rdi            ; Guardamos RDI (Buffer). 
+                        ; En la pila: [RBP] -> [RBX] -> [RDI]
+                        ; Por tanto, RDI está en [RBP - 16]
 
-    add edx, '0'        ; 0-9 -> '0'-'9'
+    ; --- VALIDACIÓN DE BASE ---
+    cmp edx, 2
+    jge .preparar
+    mov edx, 10         ; Si base < 2, forzar base 10
+
+.preparar:
+    mov eax, esi        ; EAX = Número a convertir (Dividendo)
+    mov r8d, edx        ; R8D = Base (Divisor). Usamos R8 porque DIV destruye RDX
+    xor ebx, ebx        ; EBX = Contador de dígitos
+
+    ; --- BUCLE DE DIVISIÓN ---
+.bucle_division:
+    xor edx, edx        ; Limpiar parte alta (EDX:EAX)
+    div r8d             ; EAX / Base --> Cociente en EAX, Resto en EDX
+    
+    ; Convertir resto a ASCII
+    cmp edx, 9
+    ja .es_letra        ; Si es > 9 (Hexadecimal)
+
+    add edx, '0'        ; 0-9 -> ASCII
     jmp .push_digito
 
 .es_letra:
-    add edx, 'A' - 10   ; 10-15 -> 'A'-'F' (Útil si usas base 16)
+    add edx, 'A' - 10   ; 10-35 -> 'A'-'Z'
 
 .push_digito:
     push rdx            ; Guardamos el carácter en la pila
-    inc ebx             ; Incrementamos contador
+    inc ebx             ; Aumentamos contador
     
-    test eax, eax       ; ¿El cociente es 0?
-    jnz .bucle_division ; Si no, seguimos dividiendo
+    test eax, eax       ; ¿Queda número?
+    jnz .bucle_division ; Si cociente != 0, repetir
 
-    ; Recuperar caracteres de la pila al buffer
-    ; RDI ya apunta al inicio del buffer
+    ; --- RECUPERACIÓN (CORRECCIÓN DEL ERROR) ---
+    ; NO hacemos 'pop rdi' aquí porque la pila está llena de dígitos.
+    ; Leemos el valor original directamente usando RBP.
+    
+    mov rdi, [rbp - 16] ; Recuperamos la dirección inicial del buffer
+    mov rax, rdi        ; Preparamos valor de retorno
+
+    ; --- BUCLE DE ESCRITURA ---
 .escribir:
-    pop rdx
-    mov [rdi], dl
-    inc rdi
-    dec ebx
-    jnz .escribir
+    pop rdx             ; Sacamos un dígito de la pila
+    mov [rdi], dl       ; Escribimos en el buffer
+    inc rdi             ; Avanzamos puntero del buffer
+    dec ebx             ; Decrementamos contador
+    jnz .escribir       ; Si quedan dígitos, repetir
 
-    mov byte [rdi], 0   ; Terminador nulo
+    mov byte [rdi], 0   ; Terminador nulo al final
 
-    pop rax             ; Restauramos el puntero original en RAX (Return value)
-    pop rbx             ; Restauramos RBX
+    ; --- EPÍLOGO ---
+    ; La pila ahora tiene [RBX] y [RDI] guardados.
+    ; Los dígitos ya se fueron.
     
-    mov rsp, rbp
-    pop rbp
+    pop rdi             ; Limpiamos el RDI que guardamos al principio
+    pop rbx             ; Restauramos el RBX original
+    
+    leave               ; Restaura RSP y RBP
     ret
 
 
@@ -82,6 +93,7 @@ lib_cnv_uint32_to_str:
  RUTA: ./lib/cnv/lib_cnv_uint32_to_str.inc
 ==============================================================================
 extern lib_cnv_uint32_to_str
+     
 
 
 ==============================================================================
@@ -111,103 +123,117 @@ EXIT_SUCCESS equ 0
 ==============================================================================
 ; ==============================================================================
 ; RUTA: ./lib/graph/lib_graph_get_info.asm
-; DESCRIPCIÓN: Librería para obtener geometría de pantalla desde /dev/fb0.
+; DESCRIPCIÓN: Obtiene resolución (PX) y tamaño físico (MM) del Framebuffer
 ; ==============================================================================
 
-%include "lib/constants.inc"
+default rel
 %include "lib/graph/lib_graph_get_info.inc"
 
-; Constantes internas
-FBIOGET_VSCREENINFO equ 0x4600  
-SYS_OPEN            equ 2
-SYS_CLOSE           equ 3
-SYS_IOCTL           equ 16
-O_RDONLY            equ 0
-
-default rel
-
 section .data
-    dev_fb db "/dev/fb0", 0
+    fb_path db "/dev/fb0", 0
 
 section .text
     global lib_graph_get_info
 
-; ------------------------------------------------------------------------------
-; FUNCIÓN: lib_graph_get_info
-; ENTRADA: RDI = Puntero a una estructura ScreenInfo donde guardar los datos
-; SALIDA:  RAX = 0 (Éxito), -1 (Error)
-; ------------------------------------------------------------------------------
+; ENTRADA: RDI = Puntero a estructura ScreenInfo (debe tener 24 bytes)
+; SALIDA:  RAX = 0 (Éxito) o -1 (Error)
 lib_graph_get_info:
     push rbp
     mov rbp, rsp
     push rbx
-    push r12                ; Guardamos registros callee-saved
-    
-    mov r12, rdi            ; R12 = Puntero del usuario (ScreenInfo)
+    push r12
+    push r13
 
+    mov r12, rdi            ; Guardamos el puntero de usuario (ScreenInfo)
+
+    ; --------------------------------------------------------------------------
     ; 1. ABRIR /dev/fb0
-    mov rax, SYS_OPEN
-    lea rdi, [dev_fb]
-    mov rsi, O_RDONLY
+    ; --------------------------------------------------------------------------
+    mov rax, 2              ; SYS_OPEN
+    lea rdi, [fb_path]
+    mov rsi, 0              ; O_RDONLY
     syscall
     
     cmp rax, 0
     jl .error
-    mov rbx, rax            ; RBX = File Descriptor
+    mov rbx, rax            ; Guardamos el File Descriptor (FD)
 
-    ; 2. RESERVAR BUFFER TEMPORAL PARA IOCTL
-    sub rsp, 160            ; Estructura fb_var_screeninfo del kernel
+    ; --------------------------------------------------------------------------
+    ; 2. RESERVAR BUFFER TEMPORAL EN STACK
+    ; La estructura del kernel fb_var_screeninfo mide 160 bytes.
+    ; Reservamos espacio para que ioctl escriba todo ahí sin romper nada.
+    ; --------------------------------------------------------------------------
+    sub rsp, 160            ; Reservamos 160 bytes en la pila
 
-    ; 3. CONSULTAR AL DRIVER (IOCTL)
-    mov rax, SYS_IOCTL
-    mov edi, ebx            ; FD
-    mov rsi, FBIOGET_VSCREENINFO
-    mov rdx, rsp            ; Puntero al stack
+    ; --------------------------------------------------------------------------
+    ; 3. LLAMADA IOCTL (FBIOGET_VSCREENINFO)
+    ; --------------------------------------------------------------------------
+    mov rax, 16             ; SYS_IOCTL
+    mov rdi, rbx            ; FD
+    mov rsi, 0x4600         ; Comando: Dame info variable
+    mov rdx, rsp            ; Escribe los datos en el STACK (RSP)
     syscall
 
-    test rax, rax
-    jnz .error_close
+    cmp rax, 0
+    jl .error_close
 
-    ; 4. EXTRAER Y CALCULAR
-    ; Leemos del stack lo que dijo el kernel
-    mov r8d,  [rsp]         ; Offset 0:  xres (Ancho)
-    mov r9d,  [rsp + 4]     ; Offset 4:  yres (Alto)
-    mov r10d, [rsp + 24]    ; Offset 24: bits_per_pixel
-
-    ; Calculamos el Pitch (LineLength) matemáticamente
-    ; Pitch = Ancho * (BPP / 8)
-    mov r11d, r10d
-    shr r11d, 3             ; Dividir bits entre 8 para sacar bytes
-    imul r11d, r8d          ; Multiplicar por el ancho
-
-    ; 5. GUARDAR EN LA ESTRUCTURA DEL USUARIO (R12)
-    mov [r12 + ScreenInfo.width],  r8d
-    mov [r12 + ScreenInfo.height], r9d
-    mov [r12 + ScreenInfo.bpp],    r10d
-    mov [r12 + ScreenInfo.pitch],  r11d  ; ¡Aquí va el 7680!
-
-    ; 6. LIMPIEZA
-    add rsp, 160            ; Liberar buffer temporal
+    ; --------------------------------------------------------------------------
+    ; 4. EXTRAER DATOS (COPIAR DEL STACK A LA ESTRUCTURA DE USUARIO)
+    ; --------------------------------------------------------------------------
     
-    mov rax, SYS_CLOSE      ; Cerrar archivo
-    mov edi, ebx
+    ; --- Resolución en Píxeles ---
+    mov eax, [rsp + 0]      ; xres (Offset 0 del kernel)
+    mov [r12 + ScreenInfo.width], eax
+
+    mov eax, [rsp + 4]      ; yres (Offset 4 del kernel)
+    mov [r12 + ScreenInfo.height], eax
+
+    mov eax, [rsp + 24]     ; bits_per_pixel (Offset 24 del kernel)
+    mov [r12 + ScreenInfo.bpp], eax
+
+    ; --- Dimensiones Físicas (¡LO NUEVO!) ---
+    ; Según <linux/fb.h>: 
+    ; offset 88 (0x58) = height in mm
+    ; offset 92 (0x5C) = width in mm
+    
+    mov eax, [rsp + 92]     ; width (mm)
+    mov [r12 + ScreenInfo.phy_width], eax
+    
+    mov eax, [rsp + 88]     ; height (mm)
+    mov [r12 + ScreenInfo.phy_height], eax
+
+    ; --- Calcular Pitch (LineLength) ---
+    ; Pitch = Width * (BPP / 8)
+    mov eax, [r12 + ScreenInfo.width]
+    mov ecx, [r12 + ScreenInfo.bpp]
+    shr ecx, 3              ; Dividir BPP entre 8
+    imul eax, ecx           ; Multiplicar
+    mov [r12 + ScreenInfo.pitch], eax
+
+    ; --------------------------------------------------------------------------
+    ; 5. LIMPIEZA Y SALIDA
+    ; --------------------------------------------------------------------------
+    add rsp, 160            ; Devolvemos la memoria del stack
+
+    ; Cerrar archivo
+    mov rax, 3              ; SYS_CLOSE
+    mov rdi, rbx
     syscall
 
-    xor rax, rax            ; Return 0 (Éxito)
+    mov rax, 0              ; Return 0 (Éxito)
     jmp .fin
 
 .error_close:
-    add rsp, 160
-    mov rax, SYS_CLOSE
-    mov edi, ebx
+    add rsp, 160            ; Restaurar stack antes de salir
+    mov rax, 3
+    mov rdi, rbx
     syscall
-    mov rax, -1
-    jmp .fin
 
 .error:
     mov rax, -1
 
 .fin:
+    pop r13
     pop r12
     pop rbx
     leave
@@ -218,19 +244,21 @@ lib_graph_get_info:
  RUTA: ./lib/graph/lib_graph_get_info.inc
 ==============================================================================
 ; ==============================================================================
-; RUTA: ./lib/graph/lib_graph_info.inc
-; DESCRIPCIÓN: Definición de la estructura de información de pantalla.
+; Estructura ScreenInfo Actualizada
+; Ahora incluye dimensiones físicas
 ; ==============================================================================
 
 struc ScreenInfo
-    .width      resd 1  ; 4 bytes - Ancho (xres)
-    .height     resd 1  ; 4 bytes - Alto (yres)
-    .bpp        resd 1  ; 4 bytes - Bits por Pixel
-    .pitch      resd 1  ; 4 bytes - LineLength (Bytes por línea REALES)
+    .width      resd 1  ; 0: Ancho en Píxeles (px)
+    .height     resd 1  ; 4: Alto en Píxeles (px)
+    .bpp        resd 1  ; 8: Bits por Píxel
+    .pitch      resd 1  ; 12: Bytes por Línea (LineLength)
+    .phy_width  resd 1  ; 16: Ancho Físico (mm) [NUEVO]
+    .phy_height resd 1  ; 20: Alto Físico (mm)  [NUEVO]
 endstruc
 
-; Tamaño total de la estructura (para reservar memoria con resb)
-ScreenInfo_size equ 16
+; El tamaño total ahora es 24 bytes
+ScreenInfo_size equ 24
 
 
 ==============================================================================
@@ -318,225 +346,200 @@ clean:
 
 
 ==============================================================================
- RUTA: ./proyectos/demo/demo.asm
+ RUTA: ./proyectos/cnv/test_cnv.asm
 ==============================================================================
 ; ==============================================================================
-; ARCHIVO: demo.asm
-; DESCRIPCIÓN: Ejemplo básico de uso del framework.
-;              Muestra cómo imprimir texto y usar la librería de números.
+; RUTA: ./proyectos/cnv/test_cnv.asm
+; DESCRIPCIÓN: Programa para probar la librería lib_cnv_uint32_to_str
 ; ==============================================================================
 
-; 1. Inclusión de constantes y librerías
-;    (Las rutas siempre son relativas a la raíz del proyecto)
-%include "lib/constants.inc"
-%include "lib/text/print_dec32/lib_text_print_dec32.inc"
-
-; 2. Configuración obligatoria para 64-bits
-default rel
+default rel             ; IMPORTANTE: Direccionamiento relativo para 64 bits
 
 section .data
-    ; Definimos un mensaje con salto de línea (10) y terminador nulo (0)
-    msg_hola    db "Hola, mundo desde Assembly x64!", 10, 0
-    
-    ; Calculamos la longitud automáticamente
-    len_hola    equ $ - msg_hola
+    ; Mensajes para identificar cada prueba
+    msg_titulo  db "--- TEST LIBRERIA CONVERSION ---", 10, 0
+    msg_dec     db "1. Decimal (12345):      ", 0
+    msg_hex     db "2. Hexadecimal (ADBEEF): ", 0
+    msg_bin     db "3. Binario (255):        ", 0
+    newline     db 10, 0
 
-section .text
-    global _start
-
-_start:
-    ; --------------------------------------------------------------------------
-    ; 1. Imprimir un mensaje de texto simple (Syscall directa)
-    ; --------------------------------------------------------------------------
-    mov rax, SYS_WRITE      ; Syscall ID: 1 (Write)
-    mov rdi, STDOUT         ; Descriptor: 1 (Salida estándar)
-    lea rsi, [msg_hola]     ; Dirección del mensaje
-    mov rdx, len_hola       ; Longitud del mensaje
-    syscall
-
-    ; --------------------------------------------------------------------------
-    ; 2. Usar la librería propia para imprimir un número
-    ; --------------------------------------------------------------------------
-    ; La función espera el número en el registro EDI (32 bits)
-    mov edi, -12345         
-    call lib_text_print_dec32 
-
-    ; --------------------------------------------------------------------------
-    ; 3. Salida limpia del programa
-    ; --------------------------------------------------------------------------
-    mov rax, SYS_EXIT       ; Syscall ID: 60 (Exit)
-    mov rdi, EXIT_SUCCESS   ; Código de retorno: 0 (Todo bien)
-    syscall
-
-
-==============================================================================
- RUTA: ./proyectos/graph/main.asm
-==============================================================================
-; ==============================================================================
-; RUTA: ./proyectos/graph/main.asm
-; ==============================================================================
-
-%include "lib/graph/lib_graph_get_info.inc"
-
-extern lib_graph_get_info
-
-default rel
-
-; ------------------------------------------------------------------------------
-; SECCIÓN BSS (Datos no inicializados)
-; ------------------------------------------------------------------------------
 section .bss
-    mi_pantalla resb ScreenInfo_size   ; Estructura para recibir los datos
-
-; ------------------------------------------------------------------------------
-; SECCIÓN DATA (Datos inicializados - MÁS SEGURO)
-; ------------------------------------------------------------------------------
-section .data
-    msg_titulo db "--- INFO PANTALLA ---", 10, 0
-    msg_ancho  db "Ancho (xres): ", 0
-    msg_alto   db "Alto  (yres): ", 0
-    msg_bpp    db "BPP:          ", 0
-    msg_pitch  db "LineLength:   ", 0
-    newline    db 10, 0
-    
-    ; ¡TRUCO! Inicializamos el buffer con ceros aquí para asegurar que la memoria existe.
-    ; Reservamos 32 bytes llenos de ceros.
-    buffer_num times 32 db 0 
+    ; Buffer grande para el resultado (Binario necesita hasta 33 bytes)
+    buffer_out  resb 64 
 
 section .text
     global _start
+    extern lib_cnv_uint32_to_str ; Importamos tu librería
 
 _start:
-    ; 1. OBTENER INFORMACIÓN
-    lea rdi, [mi_pantalla]
-    call lib_graph_get_info
-    
-    cmp rax, 0
-    jl .error
-
-    ; 2. IMPRIMIR TÍTULO
+    ; --- Imprimir Título ---
     lea rsi, [msg_titulo]
     call _print_str
 
-    ; 3. IMPRIMIR ANCHO
-    lea rsi, [msg_ancho]
+    ; ==========================================================================
+    ; PRUEBA 1: DECIMAL (Base 10)
+    ; Convertiremos el número 12345
+    ; ==========================================================================
+    
+    ; 1. Imprimir etiqueta
+    lea rsi, [msg_dec]
+    call _print_str
+
+    ; 2. Preparar llamada a librería
+    lea rdi, [buffer_out]   ; RDI = Dónde guardar el texto
+    mov esi, 12345          ; ESI = Número a convertir
+    mov edx, 255             ; EDX = Base (10 para Decimal)
+    call lib_cnv_uint32_to_str
+
+    ; 3. Imprimir resultado
+    lea rsi, [buffer_out]
     call _print_str
     
-    mov edi, [mi_pantalla + ScreenInfo.width]
-    call _print_num_ln
+    ; 4. Salto de línea
+    lea rsi, [newline]
+    call _print_str
 
-    ; 4. IMPRIMIR ALTO
-    lea rsi, [msg_alto]
+    ; ==========================================================================
+    ; PRUEBA 2: HEXADECIMAL (Base 16)
+    ; Convertiremos el número 0xADBEEF (11386607)
+    ; ==========================================================================
+    
+    lea rsi, [msg_hex]
+    call _print_str
+
+    lea rdi, [buffer_out]
+    mov esi, 0xADBEEF       ; Número en formato Hex
+    mov edx, 16             ; Base (16 para Hexadecimal)
+    call lib_cnv_uint32_to_str
+
+    lea rsi, [buffer_out]
     call _print_str
     
-    mov edi, [mi_pantalla + ScreenInfo.height]
-    call _print_num_ln
+    lea rsi, [newline]
+    call _print_str
 
-    ; 5. IMPRIMIR BPP
-    lea rsi, [msg_bpp]
+    ; ==========================================================================
+    ; PRUEBA 3: BINARIO (Base 2)
+    ; Convertiremos el número 255 (debería ser 11111111)
+    ; ==========================================================================
+    
+    lea rsi, [msg_bin]
+    call _print_str
+
+    lea rdi, [buffer_out]
+    mov esi, 255            ; Número
+    mov edx, 2              ; Base (2 para Binario)
+    call lib_cnv_uint32_to_str
+
+    lea rsi, [buffer_out]
     call _print_str
     
-    mov edi, [mi_pantalla + ScreenInfo.bpp]
-    call _print_num_ln
-
-    ; 6. IMPRIMIR PITCH (LINELENGTH)
-    lea rsi, [msg_pitch]
+    lea rsi, [newline]
     call _print_str
-    
-    mov edi, [mi_pantalla + ScreenInfo.pitch]
-    call _print_num_ln
 
-    ; SALIR (ÉXITO)
-    mov rax, 60         ; SYS_EXIT
-    xor rdi, rdi
+    ; ==========================================================================
+    ; FINALIZAR
+    ; ==========================================================================
+    mov rax, 60             ; sys_exit
+    xor rdi, rdi            ; código 0
     syscall
 
-.error:
-    ; SALIR (ERROR)
-    mov rax, 60
-    mov rdi, 1
-    syscall
-
-; ==============================================================================
-; RUTINAS AUXILIARES ROBUSTAS
-; ==============================================================================
-
-; --- _print_str: Imprime hasta encontrar un 0 ---
+; ------------------------------------------------------------------------------
+; RUTINA AUXILIAR: Imprimir String terminada en 0
+; Entradas: RSI = Puntero a la cadena
+; ------------------------------------------------------------------------------
 _print_str:
     push rax
     push rdi
     push rdx
     push rcx
-    push rsi            ; Guardamos RSI por seguridad
-
-    ; Calcular longitud (strlen)
-    xor rdx, rdx        ; RDX = 0
-.len_loop:
-    cmp byte [rsi+rdx], 0
-    je .do_write
-    inc rdx
-    jmp .len_loop
-
-.do_write:
-    test rdx, rdx       ; Si longitud es 0, no imprimimos nada
-    jz .exit_print
     
-    mov rax, 1          ; SYS_WRITE
-    mov rdi, 1          ; STDOUT
-    ; RSI ya apunta al string
-    ; RDX ya tiene la longitud
+    ; Calcular longitud (strlen)
+    xor rdx, rdx
+.count:
+    cmp byte [rsi+rdx], 0
+    je .write
+    inc rdx
+    jmp .count
+.write:
+    mov rax, 1              ; sys_write
+    mov rdi, 1              ; stdout
     syscall
 
-.exit_print:
-    pop rsi
     pop rcx
     pop rdx
     pop rdi
     pop rax
     ret
 
-; --- _print_num_ln: Convierte EDI a texto y lo imprime + Enter ---
-_print_num_ln:
-    push rax
-    push rbx
-    push rcx
-    push rdx
-    push rsi
-    push rdi
 
-    mov eax, edi                ; Número a convertir
-    
-    ; Usamos el buffer en .data (buffer_num)
-    ; Apuntamos al final del buffer (byte 30) para escribir hacia atrás
-    lea rsi, [buffer_num + 30]  
-    mov byte [rsi], 0           ; Terminador nulo al final
-    
-    mov ebx, 10                 ; Divisor
+==============================================================================
+ RUTA: ./proyectos/graph/main.asm
+==============================================================================
+; ==============================================================================
+; RUTA: ./proyectos/test_dpi.asm
+; ==============================================================================
+default rel
+%include "lib/graph/lib_graph_get_info.inc"
 
-.convert_loop:
-    xor edx, edx                ; Limpiar parte alta para división
-    div ebx                     ; EAX / 10 -> Cociente EAX, Resto EDX
-    
-    add dl, '0'                 ; Convertir número a ASCII
-    dec rsi                     ; Retroceder en el buffer
-    mov [rsi], dl               ; Guardar letra
-    
-    test eax, eax               ; ¿Queda número?
-    jnz .convert_loop           ; Si no es 0, repetir
+extern lib_graph_get_info
+extern lib_cnv_uint32_to_str
 
-    ; Ahora RSI apunta al principio del número generado. Imprimimos.
-    call _print_str
-    
-    ; Imprimir salto de línea
+section .bss
+    screen  resb ScreenInfo_size
+    buffer  resb 32
+
+section .data
+    msg_w   db "Ancho Fisico (mm): ", 0
+    msg_h   db "Alto Fisico  (mm): ", 0
+    msg_px  db "Resolucion   (px): ", 0
+    newline db 10, 0
+
+section .text
+    global _start
+
+_start:
+    ; 1. Obtener Info
+    lea rdi, [screen]
+    call lib_graph_get_info
+
+    ; 2. Imprimir Ancho Físico
+    lea rsi, [msg_w]
+    call _print
+    mov esi, [screen + ScreenInfo.phy_width]
+    call _print_num
+
+    ; 3. Imprimir Alto Físico
+    lea rsi, [msg_h]
+    call _print
+    mov esi, [screen + ScreenInfo.phy_height]
+    call _print_num
+
+    ; Salir
+    mov rax, 60
+    xor rdi, rdi
+    syscall
+
+; --- Ayudas Rápidas ---
+_print:
+    mov rdx, 0
+.cnt: cmp byte [rsi+rdx], 0
+    je .ok
+    inc rdx
+    jmp .cnt
+.ok: mov rax, 1
+    mov rdi, 1
+    syscall
+    ret
+
+_print_num:
+    lea rdi, [buffer]
+    mov edx, 10
+    call lib_cnv_uint32_to_str
+    lea rsi, [buffer]
+    call _print
     lea rsi, [newline]
-    call _print_str
-
-    pop rdi
-    pop rsi
-    pop rdx
-    pop rcx
-    pop rbx
-    pop rax
+    call _print
     ret
 
 
