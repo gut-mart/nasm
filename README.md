@@ -1,120 +1,98 @@
-# 🚀 NASM x86_64 Development Framework (Manjaro Edition)
+⚙️ x86_64 Linux Assembly Toolkit
+Este repositorio contiene una colección de librerías y programas de prueba escritos completamente en Ensamblador x86_64 para Linux (sintaxis NASM). El proyecto está diseñado desde cero sin utilizar librerías estándar de C (libc), interactuando directamente con el Kernel de Linux mediante llamadas al sistema (syscalls).
++2
 
-Este repositorio es un entorno de desarrollo profesional y preconfigurado para programar en **Ensamblador (Assembly x86_64)** bajo Linux. 
+📦 Módulos Principales
+Actualmente, el proyecto se divide en dos librerías principales:
 
-Está diseñado específicamente para trabajar con **Visual Studio Code**, automatizando las tareas tediosas de compilación y enlazado.
+1. Conversión Numérica (lib_cnv)
+Convierte números enteros sin signo de 32 bits (uint32) a cadenas de texto ASCII (strings).
 
-## 🧐 ¿Para qué sirve esto? (Contexto para principiantes)
 
-Programar en ensamblador "a mano" suele ser doloroso. Para probar un simple "Hola Mundo" normalmente tendrías que escribir esto en la terminal cada vez:
+Multibase: Soporta conversiones a cualquier base numérica pasándola como argumento, como Binario (2), Decimal (10) o Hexadecimal (16).
 
-```bash
-nasm -f elf64 -g -F dwarf programa.asm -o programa.o
-ld -m elf_x86_64 -o programa programa.o
-./programa
-Este proyecto elimina ese dolor.
 
-Automatización: Con solo pulsar una tecla, el sistema detecta qué archivo estás editando, lo compila, enlaza las librerías necesarias y te deja el ejecutable listo.
+Segura: Implementa validaciones internas para forzar Base 10 si se solicita una base inválida (< 2).
 
-Depuración Visual: Viene configurado para usar GDB dentro de VS Code. Puedes ver cómo cambian los registros de la CPU y la memoria línea por línea, sin usar comandos crudos.
+2. Información del Framebuffer (lib_graph)
+Interactúa con el driver de video del sistema (/dev/fb0) utilizando la syscall ioctl para extraer la configuración del hardware de video.
++2
 
-Gestión Híbrida: Mantiene tu carpeta de trabajo limpia organizando las librerías compiladas en una carpeta oculta build/, pero dejando tu ejecutable principal a la vista para un acceso rápido.
+Extrae la Resolución Lógica (ancho y alto en píxeles).
 
-📂 Estructura del Proyecto (El Árbol)
-Así es como se organiza tu entorno de trabajo:
+Extrae el Tamaño Físico real del monitor en milímetros.
 
-Plaintext
-.
-├── 📁 lib/                   # 📚 LIBRERÍAS (Código reutilizable)
-│   ├── constants.inc         # Constantes globales (Syscalls, colores...)
-│   ├── 📁 text/              # Módulos de texto
-│   │   ├── print_dec32/      # Librería para imprimir números decimales
-│   │   └── print_bin32/      # Librería para imprimir binario
-│   └── ...
-│
-├── 📁 proyectos/             # 🔨 TU TALLER (Aquí creas tus programas)
-│   └── 📁 demo/
-│       ├── demo.asm          # Tu código fuente
-│       ├── demo.o            # Objeto (Generado automáticamente aquí)
-│       └── demo              # Ejecutable (Generado automáticamente aquí)
-│
-├── 📁 build/                 # ⚙️ SALA DE MÁQUINAS (Auto-generado)
-│   └── lib/                  # Aquí se guardan los .o de las librerías para no estorbar
-│
-├── 📁 .vscode/               # 🧠 CEREBRO DE VS CODE
-│   ├── tasks.json            # Define los comandos de "Construir" y "Limpiar"
-│   └── launch.json           # Configura el depurador (F5)
-│
-├── .gitignore                # Reglas para Git (ignora binarios)
-└── Makefile                  # Script maestro de compilación inteligente
-🐧 Instalación en Manjaro (Arch Linux)
-Al usar Manjaro, utilizamos pacman en lugar de apt. Abre tu terminal y ejecuta:
+Obtiene la profundidad de color (BPP) y calcula automáticamente el Pitch o LineLength (Bytes por línea) necesario para dibujar.
 
-Bash
-# 1. Actualizar el sistema
-sudo pacman -Syu
+📂 Estructura del Proyecto
+El código está organizado de forma modular para separar las librerías reutilizables de los programas ejecutables:
 
-# 2. Instalar herramientas base (NASM, Make, GDB y GCC)
-sudo pacman -S nasm base-devel gdb
-Nota: base-devel incluye make y el enlazador ld.
+lib/: Contiene el código fuente de las librerías.
 
-⚡ Guía de Inicio Rápido
-El sistema es dinámico: Compila el archivo que tienes abierto en pantalla.
 
-1. Compilar y Ejecutar
-Abre VS Code en la carpeta del proyecto.
+constants.inc: Constantes globales como descriptores de archivo y números de syscalls.
 
-Abre tu archivo fuente (ej: proyectos/demo/demo.asm).
 
-Presiona Ctrl + Shift + B.
+cnv/: Archivos de la librería de conversión de texto.
 
-Verás que aparecen demo.o y el archivo demo (ejecutable) al lado de tu código.
 
-Abre la terminal integrada (Ctrl + ñ) y ejecuta:
+graph/: Archivos de la librería gráfica y definiciones de estructuras (struc).
++1
 
-Bash
-./proyectos/demo/demo
-2. Depurar (Debug)
-Pon un punto de ruptura (clic rojo a la izquierda del número de línea).
+proyectos/: Contiene los programas principales que consumen las librerías.
 
-Presiona F5.
 
-El programa se pausará y podrás inspeccionar registros y memoria.
+test_cnv.asm: Programa de prueba para la conversión a bases 10, 16 y 2.
++3
 
-3. Limpiar (Clean)
-Para borrar todos los ejecutables y archivos temporales antes de guardar o compartir:
 
-Menú superior: Terminal -> Run Task...
+main.asm (Test DPI): Imprime en consola un reporte completo del hardware de video.
++1
 
-Selecciona: Limpiar Proyecto Actual.
 
-Esto borrará la carpeta build/ y buscará/eliminará cualquier .o disperso.
+build/ (Generada automáticamente): Carpeta donde se almacenan los objetos compilados (.o) de las librerías.
 
-📝 Cómo crear un nuevo programa
-No necesitas configurar nada nuevo. Solo:
+🛠️ Requisitos previos
+Para compilar y ejecutar este proyecto, necesitas un entorno Linux con las siguientes herramientas:
 
-Crea una carpeta nueva en proyectos/ (ej: proyectos/calculadora).
+NASM (Netwide Assembler)
 
-Crea un archivo .asm dentro (ej: main.asm).
+LD (GNU Linker)
 
-Escribe tu código.
+GDB (Para depuración)
 
-Pulsa Ctrl + Shift + B. El Makefile detectará la ubicación automáticamente.
 
-🛠 Comandos Manuales (Terminal)
-Si prefieres no usar VS Code, puedes usar el Makefile directamente desde la terminal:
+Nota: Para ejecutar el módulo gráfico, tu usuario debe tener permisos de lectura sobre /dev/fb0.
++1
+
+🚀 Cómo compilar y ejecutar
+El proyecto incluye un Makefile inteligente capaz de compilar las librerías como dependencias y enlazarlas con el archivo principal especificado.
+
+1. Para compilar un proyecto específico:
+Pasamos la ruta del archivo a compilar a través de la variable SRC:
 
 Bash
-# Compilar un archivo específico
-make SRC=proyectos/demo/demo.asm
+# Compilar el test de conversión
+make SRC=proyectos/cnv/test_cnv.asm
 
-# Limpiar todo el proyecto (modo agresivo)
+# Compilar el reporte de hardware de video
+make SRC=proyectos/graph/main.asm
+2. Para ejecutar el binario resultante:
+El ejecutable se genera en la misma carpeta que el archivo fuente:
+
+Bash
+./proyectos/graph/main
+3. Para limpiar el proyecto:
+El sistema elimina la carpeta build/, los archivos .o dispersos y los ejecutables:
++1
+
+Bash
 make clean
-Configuración optimizada para arquitectura x86_64 en Linux.
+💻 Integración con Visual Studio Code
+El repositorio está listo para funcionar en VS Code con soporte completo de construcción y depuración:
 
+Extensiones recomendadas configuradas (C/C++ Tools, x86-64 Assembly).
 
-### Principales adaptaciones que he hecho:
+Archivo tasks.json que enlaza el atajo de compilación (Ctrl+Shift+B) con el Makefile, pasando el archivo actualmente abierto como SRC.
 
-1.  **Instalación para Manjaro:** He cambiado los comandos a `sudo pacman -S nasm base-devel gdb`. El paquete `base-devel` es vital en Arch/Manjaro porque contiene `make` y `ld`.
-2.  **Explicación del valor:** La sección "¿Para qué sirve esto?" ayuda a entender por qué este entorno es valioso frente a hacerlo manual.
-3.  **Diagrama de árbol:** He incluido el árbol visual ASCII mostrando claramente la distinción entre `lib/` (fuente) y `build/` ( compilación de lib/').
+Archivo launch.json configurado para lanzar GDB en arquitectura x86_64, deteniéndose automáticamente en el punto de entrada (_start).
