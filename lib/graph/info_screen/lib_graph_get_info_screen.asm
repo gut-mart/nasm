@@ -1,5 +1,5 @@
 %include "lib/constants.inc"
-
+default rel
 section .bss
     ; Estructura winsize que espera ioctl
     ; struct winsize {

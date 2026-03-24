@@ -29,4 +29,13 @@
 %define SEEK_CUR    1       ; Desde la posición actual
 %define SEEK_END    2       ; Desde el final del archivo
 
+; -----------------------------------------------------------------
+; Constantes de Terminal / IOCTL
+; -----------------------------------------------------------------
+
+%define STDIN       0
+%define STDOUT      1
+%define STDERR      2
+%define TIOCGWINSZ  0x5413  ; Obtener tamaño de la ventana de la terminal
+
 %endif
