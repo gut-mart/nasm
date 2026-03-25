@@ -1,5 +1,6 @@
 # 1. Ignorar toda la carpeta build (donde van los objetos de librerías)
 build/
+bin/
 
 # 2. Ignorar archivos objeto sueltos (*.o) en cualquier carpeta
 #    (Esto es vital ahora que generas .o junto a tu código)
