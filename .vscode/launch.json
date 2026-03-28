@@ -1,0 +1,32 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Depurar (GDB)",
+            "type": "cppdbg",
+            "request": "launch",
+            // CAMBIO: Busca el ejecutable en la misma carpeta del archivo abierto
+            "program": "${workspaceFolder}/bin/main",
+            "args": [],
+            "stopAtEntry": true,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
+            "miDebuggerPath": "/usr/bin/gdb",
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Habilitar impresión bonita para gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                },
+                {
+                    "description": "Forzar arquitectura x86_64",
+                    "text": "set architecture i386:x86-64",
+                    "ignoreFailures": true
+                }
+            ],
+            "preLaunchTask": "Construir Proyecto Actual"
+        }
+    ]
+}

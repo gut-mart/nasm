@@ -12,7 +12,7 @@ bin/
 *~
 revision.txt
 # 4. Ignorar la carpeta de configuración local de VS Code (opcional pero recomendado)
-.vscode/
+#.vscode/
 proyectos/
 # Makefile
 # NOTA SOBRE EJECUTABLES:

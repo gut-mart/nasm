@@ -41,8 +41,8 @@ $(BUILD_DIR)/%.o: %.asm
 	nasm $(NASMFLAGS) -MD $(@:.o=.d) $< -o $@
 
 clean:
-	rm -rf $(BIN_DIR) $(BUILD_DIR)
+	-rm -rf $(BIN_DIR)/* $(BUILD_DIR)/*
 
-# Incluimos los archivos .d generados. 
+# Incluimos los archivos .d generados.
 # El guion '-' al principio evita que Make falle si los archivos .d aún no existen (ej. primera compilación).
 -include $(DEP_MAIN) $(LIB_DEPS)

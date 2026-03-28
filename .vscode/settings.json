@@ -1,0 +1,23 @@
+{
+    "debug.allowBreakpointsEverywhere": true,
+    
+    "multiCommand.commands": [
+        {
+            "command": "multiCommand.entornoNasm",
+            "sequence": [
+                "workbench.action.closeSidebar",
+                "workbench.action.terminal.killAll", 
+                "workbench.action.terminal.new",
+                {
+                    "command": "workbench.action.terminal.sendSequence",
+                    "args": {"text": "mkdir -p '${workspaceFolder}/bin' && cd '${workspaceFolder}/bin' && clear\u000D"}
+                },
+                "workbench.action.terminal.split",
+                {
+                    "command": "workbench.action.terminal.sendSequence",
+                    "args": {"text": "cd '${fileDirname}' && clear\u000D"}
+                }
+            ]
+        }
+    ]
+}

@@ -15,11 +15,10 @@ fi
 
 echo "👀 Monitorizando la carpeta '$DIR_TO_WATCH' y sus subcarpetas..."
 
-# AÑADIDO: La bandera '-r' permite vigilar dentro de las carpetas nuevas que crees
-inotifywait -m -r -e create -e moved_to --format '%w%f' "$DIR_TO_WATCH" |
-while read NUEVO_ARCHIVO
+# La bandera '-r' permite vigilar dentro de las carpetas nuevas que crees
+inotifywait -m -r -e create -e moved_to --format '%w%f' "$DIR_TO_WATCH" | while read NUEVO_ARCHIVO
 do
-    # CONDICIÓN AÑADIDA: Solo actuamos si el archivo creado/movido termina en "/main.asm"
+    # Solo actuamos si el archivo creado/movido termina en "/main.asm"
     if [[ "$NUEVO_ARCHIVO" == */main.asm ]]; then
         
         # Extraemos la ruta de la carpeta donde se acaba de crear el main.asm
@@ -29,15 +28,18 @@ do
         # Calcular la ruta relativa del proyecto respecto a la raíz
         # Ejemplo: "proyectos/mi_juego"
         REL_PATH="${CARPETA_PROYECTO#$SCRIPT_DIR/}"
+        
+        # NUEVO: Calcular cuántos "hacia atrás" hay que ir para llegar a la raíz (Portabilidad)
+        REL_ROOT="$(realpath --relative-to="$CARPETA_PROYECTO" "$SCRIPT_DIR")"
 
         ARCHIVO_MAKE="$CARPETA_PROYECTO/Makefile"
         
         # Solo creamos el Makefile si no existe ya en esa carpeta
         if [ ! -f "$ARCHIVO_MAKE" ]; then
-            echo "⚙️  Generando Makefile automático..."
+            echo "⚙️  Generando Makefile automático portable..."
             
             cat << EOF > "$ARCHIVO_MAKE"
-ROOT_DIR = $SCRIPT_DIR
+ROOT_DIR = $REL_ROOT
 PROJECT_SRC = $REL_PATH/main.asm
 
 all:
