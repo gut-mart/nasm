@@ -14,7 +14,7 @@ Es vital que los visitantes entiendan qué hace especial a tu entorno. Te sugier
 * **Monitor de Sistema (inotify):** Un servicio en segundo plano que vigila las carpetas. Al crear un nuevo archivo `main.asm`, genera instantáneamente un `Makefile` automático con rutas relativas para garantizar la portabilidad.
 * **Centro de Mando Dual (VS Code):** Automatización mediante macros de teclado (`F10`, `F11`, `F12`) que transforma la interfaz del editor gestionando terminales divididas y ocultando paneles sin tocar el ratón.
 * **Compilación Inteligente y Segura:** Las tareas de VS Code ejecutan `make clean` automáticamente antes de cada construcción, evitando errores de dependencias fantasma y conservando las rutas ancladas de las terminales.
-* **Librería Estática Integrada:** Todo el código fuente almacenado en la carpeta `lib/` se compila y enlaza automáticamente como `libcore.a` en todos los proyectos.
+* **Librería Estática Integrada:** Todo el código fuente almacenado en la carpeta `lib/` se compila y enlaza automáticamente como `libcore.a` en todos los comandos.
 
 ## 🛠️ Instrucciones de Instalación
 
@@ -59,7 +59,7 @@ Indica que, tras aceptar las extensiones recomendadas por el área de trabajo, d
 
 Explica brevemente cómo usar el entorno una vez configurado:
 
-1. **Crear:** Añadir una carpeta nueva en `proyectos/` con un archivo `main.asm`.
+1. **Crear:** Añadir una carpeta nueva en `comandos/` con un archivo `main.asm`.
 2. **Magia:** El sistema crea el `Makefile` en segundo plano.
 3. **Desplegar:** Al pulsar **`F12`** en el código, la pantalla se divide en el modo de desarrollo (terminal `bin/` a la izquierda, terminal normal a la derecha).
 4. **Navegar:** Usar **`F10`** para cambiar entre terminales y **`F11`** para ocultar/mostrar el explorador de archivos.

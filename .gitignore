@@ -13,7 +13,7 @@ bin/
 revision.txt
 # 4. Ignorar la carpeta de configuración local de VS Code (opcional pero recomendado)
 #.vscode/
-proyectos/
+comandos/
 # Makefile
 # NOTA SOBRE EJECUTABLES:
 # Como en Linux los ejecutables no tienen extensión, es difícil ignorarlos todos automáticamente

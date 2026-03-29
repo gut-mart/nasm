@@ -119,7 +119,7 @@ _imprimir_bin:
 
 ---
 
-## 🔧 Integración en Proyectos
+## 🔧 Integración en comandos
 
 Para usar esta librería en tu proyecto NASM:
 

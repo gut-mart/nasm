@@ -10,7 +10,7 @@ sudo pacman -S --needed inotify-tools nasm make gdb gcc
 
 # 2. Dar permisos de ejecución al monitor
 echo "[2/5] Preparando scripts..."
-chmod +x monitor_proyectos.sh
+chmod +x monitor_comandos.sh
 
 # 3. Crear el servicio de sistema dinámicamente
 echo "[3/5] Creando servicio en segundo plano..."
@@ -22,12 +22,12 @@ mkdir -p "$SERVICE_DIR"
 
 cat << EOF > "$SERVICE_FILE"
 [Unit]
-Description=Monitor de Proyectos Ensamblador (inotify)
+Description=Monitor de comandos Ensamblador (inotify)
 After=network.target
 
 [Service]
 Type=simple
-ExecStart=$CURRENT_DIR/monitor_proyectos.sh
+ExecStart=$CURRENT_DIR/monitor_comandos.sh
 WorkingDirectory=$CURRENT_DIR
 Restart=always
 RestartSec=3
@@ -69,5 +69,5 @@ cat << 'EOF' > "$VSCODE_USER_DIR/keybindings.json"
 EOF
 
 echo "-------------------------------------------------------"
-echo "✅ ¡Todo listo! Ya puedes crear carpetas en proyectos/"
+echo "✅ ¡Todo listo! Ya puedes crear carpetas en comandos/"
 echo "======================================================="
