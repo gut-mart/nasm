@@ -1,41 +1,37 @@
-%ifndef CONSTANTS_INC
-%define CONSTANTS_INC
+; =================================================================
+; ARCHIVO: lib/constants.inc
+; DESCRIPCION: Definicion de constantes globales del sistema (x86_64)
+; =================================================================
 
-; -----------------------------------------------------------------
-; Llamadas al sistema (Syscalls) para Linux x86_64
-; -----------------------------------------------------------------
+; --- Llamadas al sistema (Syscalls) ---
 %define SYS_READ    0
 %define SYS_WRITE   1
 %define SYS_OPEN    2
 %define SYS_CLOSE   3
-%define SYS_LSEEK   8
+%define SYS_MMAP    9       ; Mapeo de memoria en espacio de usuario
 %define SYS_IOCTL   16
 %define SYS_EXIT    60
 
-; -----------------------------------------------------------------
-; Banderas de apertura de archivos (File Open Flags)
-; -----------------------------------------------------------------
-%define O_RDONLY    0       ; Solo lectura
-%define O_WRONLY    1       ; Solo escritura
-%define O_RDWR      2       ; Lectura y escritura
-%define O_CREAT     64      ; Crear archivo si no existe
-%define O_TRUNC     512     ; Truncar archivo a tamaño 0
-%define O_APPEND    1024    ; Escribir al final del archivo
-
-; -----------------------------------------------------------------
-; Desplazamientos para lseek (Seek "Whence")
-; -----------------------------------------------------------------
-%define SEEK_SET    0       ; Desde el principio del archivo
-%define SEEK_CUR    1       ; Desde la posición actual
-%define SEEK_END    2       ; Desde el final del archivo
-
-; -----------------------------------------------------------------
-; Constantes de Terminal / IOCTL
-; -----------------------------------------------------------------
-
+; --- Descriptores de archivo estandar ---
 %define STDIN       0
 %define STDOUT      1
 %define STDERR      2
-%define TIOCGWINSZ  0x5413  ; Obtener tamaño de la ventana de la terminal
 
-%endif
+; --- Banderas para apertura de archivos (sys_open) ---
+%define O_RDONLY    0       ; Solo lectura
+%define O_WRONLY    1       ; Solo escritura
+%define O_RDWR      2       ; Lectura y escritura
+
+; --- Constantes IOCTL (Terminal y Dispositivos) ---
+%define TIOCGWINSZ  0x5413  ; Obtener tamaño de ventana de terminal
+
+; =================================================================
+; --- NUEVAS CONSTANTES: MAPEO DE MEMORIA (FASE 2) ---
+; =================================================================
+
+; Banderas de proteccion (prot)
+%define PROT_READ   0x1     ; La memoria puede ser leida
+%define PROT_WRITE  0x2     ; La memoria puede ser escrita
+
+; Banderas de visibilidad (flags)
+%define MAP_SHARED  0x01    ; Comparte los cambios con el dispositivo real (/dev/fb0)
