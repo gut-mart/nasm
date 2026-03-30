@@ -1,69 +1,75 @@
+Entorno de Desarrollo y Experimentación en Ensamblador (NASM) para Linux
+📌 Propósito del Proyecto
+El objetivo principal de este proyecto es proporcionar un entorno estructurado para la experimentación y el aprendizaje del lenguaje Ensamblador x86_64 (NASM) en sistemas Linux.
+
+El diseño del proyecto se centra en la creación modular de código de bajo nivel capaz de interactuar directamente con el kernel del sistema operativo (mediante syscalls). Para lograr esto, el entorno divide claramente la lógica reutilizable (librerías) de los programas finales (comandos). Como caso de uso actual, el entorno incluye herramientas para leer datos gráficos y mapear la memoria RAM de video a través del dispositivo /dev/fb0.
+
+📂 Arquitectura de Directorios
+El proyecto impone una estructura de carpetas estricta para mantener el código organizado y facilitar el proceso de construcción automatizado:
 
 
+lib/: Aloja todas las librerías desarrolladas en Ensamblador. Estas librerías contienen las funciones base que interactúan con el kernel de Linux (como operaciones de entrada/salida de archivos, conversiones numéricas y macros del sistema). Todo el código aquí se empaqueta en una librería estática unificada (libcore.a).
++3
 
-## 🚀 Título y Propósito del Proyecto
 
-El encabezado principal debe dejar claro de un vistazo qué es esto: un **Entorno de Desarrollo Automatizado para Ensamblador (NASM)**. 
+comandos/: Contiene los programas individuales o "comandos" diseñados por el desarrollador. Cada programa alojado aquí utiliza las funciones proporcionadas por la carpeta lib/ para ejecutar tareas específicas.
++3
 
-Debes especificar que es un entorno profesional, 100% portable y optimizado para distribuciones basadas en Arch Linux (como Manjaro), diseñado para eliminar la fricción de compilar y enlazar archivos a bajo nivel integrándose con Visual Studio Code.
+build/: Es un directorio temporal gestionado automáticamente por el sistema. Durante la compilación, aquí se almacenan todos los archivos objeto (.o) y archivos de dependencias generados.
++1
 
-## ✨ Características Principales a Destacar
 
-Es vital que los visitantes entiendan qué hace especial a tu entorno. Te sugiero incluir esta lista exacta:
+bin/: Es el directorio de destino final. Una vez que el enlazador (ld) une el código del comando con la librería estática, el ejecutable binario resultante se guarda en esta carpeta listo para ser utilizado.
++2
 
-* **Monitor de Sistema (inotify):** Un servicio en segundo plano que vigila las carpetas. Al crear un nuevo archivo `main.asm`, genera instantáneamente un `Makefile` automático con rutas relativas para garantizar la portabilidad.
-* **Centro de Mando Dual (VS Code):** Automatización mediante macros de teclado (`F10`, `F11`, `F12`) que transforma la interfaz del editor gestionando terminales divididas y ocultando paneles sin tocar el ratón.
-* **Compilación Inteligente y Segura:** Las tareas de VS Code ejecutan `make clean` automáticamente antes de cada construcción, evitando errores de dependencias fantasma y conservando las rutas ancladas de las terminales.
-* **Librería Estática Integrada:** Todo el código fuente almacenado en la carpeta `lib/` se compila y enlaza automáticamente como `libcore.a` en todos los comandos.
+🚀 Flujo de Trabajo y Compilación Automatizada
+El entorno implementa un flujo de trabajo altamente automatizado que permite al desarrollador centrarse en escribir código sin preocuparse por los detalles del enlazador:
 
-## 🛠️ Instrucciones de Instalación
 
-El paso a paso para un usuario nuevo debe ser muy directo:
+Monitorización: Un script en segundo plano (monitor_comandos.sh) vigila la carpeta comandos/.
++1
 
-1. Clonar o descargar el repositorio en su equipo.
-2. Abrir una terminal en la raíz del proyecto.
-3. Ejecutar el script de preparación con el comando: `./setup_manjaro.sh`
-   > **Nota para el usuario:** Este script instalará dependencias (`nasm`, `make`, `gdb`, `inotify-tools`) y levantará el servicio `systemd` que monitoriza los archivos.
 
-## ⚙️ Configuración Obligatoria de VS Code
+Generación Dinámica: Al detectar la creación o modificación de un archivo .asm, el sistema genera o actualiza automáticamente un archivo Makefile específico para ese comando.
++1
 
-Aquí debes avisarles de la única limitación técnica que no podemos automatizar por seguridad: los atajos de teclado locales. 
 
-Indica que, tras aceptar las extensiones recomendadas por el área de trabajo, deben abrir sus preferencias de atajos de teclado (`Ctrl + K`, luego `Ctrl + S`), abrir el formato JSON y pegar el siguiente bloque para activar el Centro de Mando:
+Construcción (Make): Al solicitar la compilación, make procesa el código, enviando los archivos intermedios a build/ y generando el binario final en bin/.
 
-```json
-[
-    {
-        "key": "f12",
-        "command": "multiCommand.entornoNasm",
-        "when": "editorTextFocus"
-    },
-    {
-        "key": "f12",
-        "command": "workbench.action.togglePanel",
-        "when": "terminalFocus"
-    },
-    {
-        "key": "f10",
-        "command": "workbench.action.terminal.focusNextPane",
-        "when": "terminalFocus"
-    },
-    {
-        "key": "f11",
-        "command": "workbench.action.toggleSidebarVisibility"
-    }
-]
-```
 
-## 💻 Flujo de Trabajo Diario
+Ejecución y Depuración: Gracias a la integración con VS Code, el ejecutable resultante en la carpeta bin/ puede ser lanzado o depurado paso a paso utilizando GDB.
 
-Explica brevemente cómo usar el entorno una vez configurado:
+🛠️ Requisitos Previos e Instalación
+Este entorno está diseñado inicialmente para Manjaro Linux (o distribuciones basadas en Arch Linux) y utiliza Visual Studio Code como editor principal.
++3
 
-1. **Crear:** Añadir una carpeta nueva en `comandos/` con un archivo `main.asm`.
-2. **Magia:** El sistema crea el `Makefile` en segundo plano.
-3. **Desplegar:** Al pulsar **`F12`** en el código, la pantalla se divide en el modo de desarrollo (terminal `bin/` a la izquierda, terminal normal a la derecha).
-4. **Navegar:** Usar **`F10`** para cambiar entre terminales y **`F11`** para ocultar/mostrar el explorador de archivos.
-5. **Compilar y Ejecutar:** Lanzar la compilación con VS Code y ejecutar con `./main` en la terminal izquierda.
+1. Preparar el Entorno
+El proyecto incluye un script automatizado para configurar el sistema operativo. Abre tu terminal en la raíz del proyecto y ejecuta:
 
----
+Bash
+./setup_manjaro.sh
+Este script se encarga de:
 
+Instalar las dependencias del sistema (inotify-tools, nasm, make, gdb, gcc).
++2
+
+Crear y activar un servicio en segundo plano (monitor_asm.service) para vigilar tus archivos.
++2
+
+Configurar los atajos de teclado en VS Code.
+
+2. Extensiones de VS Code
+Para que las macros de teclado y la depuración funcionen correctamente, es obligatorio instalar las extensiones definidas en .vscode/extensions.json:
+
+
+ryuta46.multi-command (Requerida para las macros automatizadas).
+
+
+ms-vscode.cpptools (Para el soporte del depurador GDB).
+
+
+13xforever.language-x86-64-assembly (Para el resaltado de sintaxis).
+
+3. Uso Diario
+Simplemente crea un archivo .asm en comandos/. El sistema creará su Makefile. Presiona F12 en VS Code para disparar la limpieza de terminales, crear las carpetas necesarias y compilar el proyecto.
++4
