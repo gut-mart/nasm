@@ -1,0 +1,49 @@
+{
+    "debug.allowBreakpointsEverywhere": true,
+    "makefile.configureOnOpen": false,
+    
+    "workbench.tree.indent": 20,
+    "explorer.compactFolders": false,
+    "explorer.fileNesting.enabled": true,
+    "explorer.fileNesting.expand": false,
+    "explorer.fileNesting.patterns": {
+        "*.asm": "${capture}.inc, ${capture}.md, ${capture}.o, Makefile"
+    },
+    "workbench.iconTheme": "material-icon-theme",
+
+    "files.exclude": {
+        "**/constants.inc": true,
+        "**/sys_macros.inc": true,
+        "**/.git": true,
+        "**/*.sh": true,
+        "**/build": true,
+        "**/revision.txt": true,
+        "Makefile": true,
+        ".gitignore": true,
+        "README.md": true,
+        "bin": true,
+        ".vscode": true,
+        "*.code-workspace": true
+    },
+
+    "multiCommand.commands": [
+        {
+            "command": "multiCommand.entornoNasm",
+            "sequence": [
+                "workbench.action.closeSidebar",
+                "workbench.action.terminal.killAll", 
+                "workbench.action.terminal.new",
+                {
+                    "command": "workbench.action.terminal.sendSequence",
+                    "args": {"text": "mkdir -p '${workspaceFolder}/bin' && cd '${workspaceFolder}/bin' && clear\u000D"}
+                },
+                "workbench.action.terminal.split",
+                {
+                    "command": "workbench.action.terminal.sendSequence",
+                    "args": {"text": "cd '${fileDirname}' && clear\u000D"}
+                },
+                "workbench.action.toggleMaximizedPanel"
+            ]
+        }
+    ]
+}
