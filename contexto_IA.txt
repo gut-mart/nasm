@@ -1,0 +1,8 @@
+1. Lenguaje y Entorno:
+* Lenguaje: Ensamblador x86_64 (Sintaxis NASM/Intel) puro, interactuando directamente con Syscalls de Linux.
+* Entorno: VS Code configurado con extensiones de GDB, coloreado ASM y automatización de terminales divididas mediante macros (multi-command en la tecla F12).2. Arquitectura de Directorios:comandos/: Contiene los ejecutables principales (ej. monitor/core/fb_core.asm). Un script en segundo plano (monitor_comandos.sh vía inotify) auto-genera un Makefile aquí cuando se crea un archivo nuevo.lib/: El núcleo del framework. Se compila en una librería estática (libcore.a).
+* cnv/: Rutinas de conversión de datos (ej. string a int32 validado/rápido, y uint32 a string con soporte de bases numéricas).
+* io/: Operaciones de lectura/escritura de archivos (lib_file.asm) e impresión en terminal estándar/error (lib_print.asm).graph/: Motor del Framebuffer. Define la estructura ScreenInfo y maneja resoluciones, offsets de color y punteros de memoria de video.
+* lib/constants.inc / lib/sys_macros.inc: Archivos cabecera de inclusión obligatoria que contienen las definiciones de Syscalls (0=READ, 1=WRITE, 9=MMAP, 16=IOCTL, etc.) y macros limpias (sys_write, sys_open, sys_exit).3. Sistema de Construcción y Scripts (DevOps interno):
+* El proyecto usa un Makefile en la raíz que compila las dependencias dinámicamente y enlaza libcore.a con los objetos de la carpeta comandos/.
+* Scripts clave: empaquetar.sh (exporta el proyecto a texto), refactorizar.sh (renombrado masivo seguro revisando estado en Git) y terminal_nasm.sh (apertura inteligente de terminales basada en los archivos modificados recientemente).
