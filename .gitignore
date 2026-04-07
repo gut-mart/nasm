@@ -19,4 +19,5 @@ revision.txt
 # Como en Linux los ejecutables no tienen extensión, es difícil ignorarlos todos automáticamente
 # sin ignorar carpetas por error.
 # REGLA DE ORO: Ejecuta la tarea "Limpiar Proyecto Actual" (make clean) antes de hacer un commit.
-
+# Ignorar Makefiles autogenerados en la carpeta comandos y subcarpetas
+comandos/**/Makefile
