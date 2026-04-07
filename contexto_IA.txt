@@ -17,3 +17,18 @@
 4. Filosofía de Construcción de Librerías (Arquitectura de Dos Capas):
 * Capa 1 (Frontera Segura / Wrapper Público): Funciones expuestas (ej. `lib_draw_pixel.asm`) responsables de la validación estricta de parámetros y el recorte matemático (Clipping). Previenen fallos de segmentación (Segfaults) bloqueando entradas inválidas. Si la validación es exitosa, delegan la ejecución a la capa interna mediante saltos directos (Tail Call con `jmp`).
 * Capa 2 (Núcleo Rápido / Motor Privado): Funciones con el sufijo `fast` (ej. `lib_draw_pixelfast.asm`) que asumen parámetros perfectos. Suprimen comprobaciones condicionales (`cmp`) y se enfocan en ejecutar algoritmos y escrituras directas en memoria con el máximo rendimiento posible (Bucle Interno Ciego). Nunca deben exponerse a la entrada directa del usuario.
+
+==============================================================================
+ NORMATIVA DE DISEÑO: GESTIÓN DE COLOR Y HARDWARE
+==============================================================================
+- Independencia del Hardware: El usuario del framework siempre interactúa con colores en formato universal estándar RGB (0xRRGGBB).
+- Traducción Previa (Pre-cálculo): Las librerías de trazado (Capa 1 y Capa 2) NO deben calcular offsets de color internamente para evitar la pérdida de ciclos de CPU en bucles de dibujado.
+- Delegación: La traducción del color estándar al formato nativo del Framebuffer (ej. BGR) se realizará una única vez mediante la librería `lib_color_pack` antes de invocar a las primitivas geométricas (píxeles, líneas, rectángulos). Las funciones gráficas asumen que el registro del color ya viene preparado para inyectarse en memoria.
+==============================================================================
+ TODO / DEUDA TÉCNICA (FASE 3)
+==============================================================================
+- [ ] Soporte Multi-BPP (16-bit / 24-bit): Actualmente el motor gráfico (lib_color_pack y lib_draw_pixelfast) está optimizado exclusivamente para Framebuffers de 32 bits. 
+- Para soportar hardware antiguo o embebido (ej. Raspberry Pi en modo 16 bits), será necesario:
+    1. Extraer los 'length' (tamaño en bits de cada canal) desde fb_var_screeninfo en fb_core.
+    2. Actualizar lib_color_pack para comprimir el color (ej. formato RGB565).
+    3. Modificar lib_draw_pixelfast para que escriba en memoria el tamaño exacto (mov word en lugar de mov dword).
