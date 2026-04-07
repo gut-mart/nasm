@@ -1,44 +1,129 @@
 ; ==============================================================================
 ; LIBRERÍA: lib_string_int32cval.asm
-; DESCRIPCIÓN: Convierte texto ASCII a entero (32 bits) CON validación de datos.
+; DESCRIPCIÓN: Capa 1 (Escudo). Identifica prefijos y valida caracteres.
 ; ==============================================================================
 
 default rel
 
+extern lib_string_int32fast
+
 section .text
     global lib_string_int32cval
 
-; ------------------------------------------------------------------------------
-; FUNCIÓN: lib_string_int32cval
-; ENTRADA: RDI = Puntero a la cadena terminada en nulo
-; SALIDA:  RAX = Valor numérico (EAX) extendido a 64 bits
-; ------------------------------------------------------------------------------
 lib_string_int32cval:
     push rbp
     mov rbp, rsp
+    push rbx            
     
-    xor eax, eax        ; Acumulador = 0
-    xor rcx, rcx        ; Registro de lectura = 0
+    mov rbx, rdi        ; Guardamos el inicio de la cadena
 
-.bucle_lectura:
-    mov cl, byte [rdi]  
-    test cl, cl         ; Comprobar nulo (Fin de cadena)
-    jz .fin             
-    
-    ; --- BARRERA DE VALIDACIÓN ---
-    cmp cl, '0'         
-    jl .fin             ; Si es menor a '0', abortar
-    cmp cl, '9'         
-    jg .fin             ; Si es mayor a '9', abortar
-    
-    ; --- CONVERSIÓN ---
-    sub cl, '0'         
-    imul eax, eax, 10   ; Multiplicación estándar (segura pero ligeramente más lenta)
-    add eax, ecx        
-    
-    inc rdi             
-    jmp .bucle_lectura  
+    mov cl, byte [rdi]
+    test cl, cl
+    jz .error           
 
-.fin:
+    cmp cl, '0'
+    jne .val_dec        
+
+    ; --- DETECCIÓN DE PREFIJO ---
+    mov ch, byte [rdi+1]
+    cmp ch, 'x'
+    je .prep_hex
+    cmp ch, 'X'
+    je .prep_hex
+    cmp ch, 'b'
+    je .prep_bin
+    cmp ch, 'B'
+    je .prep_bin
+    cmp ch, 'o'
+    je .prep_oct
+    cmp ch, 'O'
+    je .prep_oct
+    cmp ch, 'd'
+    je .prep_dec
+    cmp ch, 'D'
+    je .prep_dec
+    jmp .val_dec
+
+; --- FIX: Saltos en líneas separadas ---
+.prep_hex: 
+    add rdi, 2
+    jmp .val_hex
+.prep_bin: 
+    add rdi, 2
+    jmp .val_bin
+.prep_oct: 
+    add rdi, 2
+    jmp .val_oct
+.prep_dec: 
+    add rdi, 2
+    jmp .val_dec
+
+    ; --- VALIDACIÓN HEXADECIMAL ---
+.val_hex:
+    mov cl, byte [rdi]
+    test cl, cl
+    jz .exito
+    cmp cl, '0'
+    jl .error
+    cmp cl, '9'
+    jle .next_hex
+    cmp cl, 'A'
+    jl .error
+    cmp cl, 'F'
+    jle .next_hex
+    cmp cl, 'a'
+    jl .error
+    cmp cl, 'f'
+    jg .error
+.next_hex:
+    inc rdi
+    jmp .val_hex
+
+    ; --- VALIDACIÓN BINARIA ---
+.val_bin:
+    mov cl, byte [rdi]
+    test cl, cl
+    jz .exito
+    cmp cl, '0'
+    jl .error
+    cmp cl, '1'
+    jg .error
+    inc rdi
+    jmp .val_bin
+
+    ; --- VALIDACIÓN OCTAL ---
+.val_oct:
+    mov cl, byte [rdi]
+    test cl, cl
+    jz .exito
+    cmp cl, '0'
+    jl .error
+    cmp cl, '7'
+    jg .error
+    inc rdi
+    jmp .val_oct
+
+    ; --- VALIDACIÓN DECIMAL ---
+.val_dec:
+    mov cl, byte [rdi]
+    test cl, cl
+    jz .exito
+    cmp cl, '0'
+    jl .error
+    cmp cl, '9'
+    jg .error
+    inc rdi
+    jmp .val_dec
+
+    ; --- DELEGACIÓN ---
+.exito:
+    mov rdi, rbx        
+    pop rbx             
     leave               
+    jmp lib_string_int32fast 
+
+.error:
+    xor eax, eax        
+    pop rbx
+    leave
     ret
