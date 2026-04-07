@@ -1,8 +1,19 @@
 1. Lenguaje y Entorno:
-* Lenguaje: Ensamblador x86_64 (Sintaxis NASM/Intel) puro, interactuando directamente con Syscalls de Linux.
-* Entorno: VS Code configurado con extensiones de GDB, coloreado ASM y automatización de terminales divididas mediante macros (multi-command en la tecla F12).2. Arquitectura de Directorios:comandos/: Contiene los ejecutables principales (ej. monitor/core/fb_core.asm). Un script en segundo plano (monitor_comandos.sh vía inotify) auto-genera un Makefile aquí cuando se crea un archivo nuevo.lib/: El núcleo del framework. Se compila en una librería estática (libcore.a).
-* cnv/: Rutinas de conversión de datos (ej. string a int32 validado/rápido, y uint32 a string con soporte de bases numéricas).
-* io/: Operaciones de lectura/escritura de archivos (lib_file.asm) e impresión en terminal estándar/error (lib_print.asm).graph/: Motor del Framebuffer. Define la estructura ScreenInfo y maneja resoluciones, offsets de color y punteros de memoria de video.
-* lib/constants.inc / lib/sys_macros.inc: Archivos cabecera de inclusión obligatoria que contienen las definiciones de Syscalls (0=READ, 1=WRITE, 9=MMAP, 16=IOCTL, etc.) y macros limpias (sys_write, sys_open, sys_exit).3. Sistema de Construcción y Scripts (DevOps interno):
-* El proyecto usa un Makefile en la raíz que compila las dependencias dinámicamente y enlaza libcore.a con los objetos de la carpeta comandos/.
-* Scripts clave: empaquetar.sh (exporta el proyecto a texto), refactorizar.sh (renombrado masivo seguro revisando estado en Git) y terminal_nasm.sh (apertura inteligente de terminales basada en los archivos modificados recientemente).
+* Lenguaje: Ensamblador x86_64 (Sintaxis NASM/Intel) puro, interactuando directamente con Syscalls de Linux[cite: 282].
+* Entorno: VS Code configurado con extensiones de GDB, coloreado ASM y automatización de terminales divididas mediante macros (multi-command en la tecla F12)[cite: 283].
+
+2. Arquitectura de Directorios:
+* comandos/: Contiene los ejecutables principales (ej. monitor/core/fb_core.asm)[cite: 284]. Un script en segundo plano (monitor_comandos.sh vía inotify) auto-genera un Makefile aquí cuando se crea un archivo nuevo[cite: 284].
+* lib/: El núcleo del framework[cite: 284]. Se compila en una librería estática (libcore.a)[cite: 285].
+  * cnv/: Rutinas de conversión de datos (ej. string a int32 validado/rápido, y uint32 a string con soporte de bases numéricas)[cite: 285].
+  * io/: Operaciones de lectura/escritura de archivos (lib_file.asm) e impresión en terminal estándar/error (lib_print.asm)[cite: 286].
+  * graph/: Motor del Framebuffer[cite: 286]. Define la estructura ScreenInfo y maneja resoluciones, offsets de color y punteros de memoria de video[cite: 287].
+  * lib/constants.inc / lib/sys_macros.inc: Archivos cabecera de inclusión obligatoria que contienen las definiciones de Syscalls (0=READ, 1=WRITE, 9=MMAP, 16=IOCTL, etc.) y macros limpias (sys_write, sys_open, sys_exit)[cite: 288].
+
+3. Sistema de Construcción y Scripts (DevOps interno):
+* El proyecto usa un Makefile en la raíz que compila las dependencias dinámicamente y enlaza libcore.a con los objetos de la carpeta comandos/[cite: 289].
+* Scripts clave: empaquetar.sh (exporta el proyecto a texto), refactorizar.sh (renombrado masivo seguro revisando estado en Git) y terminal_nasm.sh (apertura inteligente de terminales basada en los archivos modificados recientemente)[cite: 290].
+
+4. Filosofía de Construcción de Librerías (Arquitectura de Dos Capas):
+* Capa 1 (Frontera Segura / Wrapper Público): Funciones expuestas (ej. `lib_draw_pixel.asm`) responsables de la validación estricta de parámetros y el recorte matemático (Clipping). Previenen fallos de segmentación (Segfaults) bloqueando entradas inválidas. Si la validación es exitosa, delegan la ejecución a la capa interna mediante saltos directos (Tail Call con `jmp`).
+* Capa 2 (Núcleo Rápido / Motor Privado): Funciones con el sufijo `fast` (ej. `lib_draw_pixelfast.asm`) que asumen parámetros perfectos. Suprimen comprobaciones condicionales (`cmp`) y se enfocan en ejecutar algoritmos y escrituras directas en memoria con el máximo rendimiento posible (Bucle Interno Ciego). Nunca deben exponerse a la entrada directa del usuario.
