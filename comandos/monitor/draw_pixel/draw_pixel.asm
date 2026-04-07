@@ -5,6 +5,7 @@
 default rel
 
 ; Importamos las librerías necesarias
+extern lib_color_pack
 extern fb_core, fb_map
 extern lib_draw_pixelcval
 extern lib_string_int32cval
@@ -99,7 +100,11 @@ _start:
     call fb_map
     cmp rax, 0
     jl .error_fb
-
+    ; --- 4.5 TRADUCCIÓN AL HARDWARE NATIVO ---
+    mov rdi, datos_fb
+    mov esi, dword [color]      ; Le pasamos el color estándar del usuario
+    call lib_color_pack         ; EAX devuelve el color perfecto para tu PC
+    mov dword [color], eax      ; Actualizamos la variable con el color nativo
     ; --- 5. DIBUJAR PÍXEL (CAPA SEGURA) ---
     mov rdi, datos_fb
     mov esi, dword [coord_x]
