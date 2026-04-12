@@ -25,20 +25,20 @@ _start:
     call print_nl
     
     ; Inicializar contador en 1
-    mov rcx, 1
+    mov r8, 1
     
 .loop:
     ; Si llegamos a 11, salir del bucle
-    cmp rcx, 11
+    cmp r8, 11
     je .loop_end
     
     ; Imprimir el número actual
-    mov rdi, rcx
+    mov rdi, r8
     call print_int
     call print_nl
     
     ; Incrementar contador
-    inc rcx
+    inc r8
     jmp .loop
     
 .loop_end:
