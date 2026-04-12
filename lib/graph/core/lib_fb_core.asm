@@ -1,3 +1,11 @@
+; ==============================================================================
+; RUTA: ./lib/graph/core/lib_fb_core.asm
+; CORRECCIONES:
+;   - fb_map: Comprobación de error de mmap cambiada de 'jl' a 'cmp rax, -1 / je'
+;             ya que mmap devuelve MAP_FAILED (0xFFFFFFFFFFFFFFFF) que como valor
+;             sin signo de 64 bits NO es negativo en sentido estricto.
+; ==============================================================================
+
 %include "lib/constants.inc"
 %include "lib/sys_macros.inc"
 %include "lib/graph/core/lib_fb_core.inc"
@@ -7,6 +15,9 @@ default rel
 ; Constantes IOCTL para el Framebuffer
 %define FBIOGET_VSCREENINFO 0x4600
 %define FBIOGET_FSCREENINFO 0x4602
+
+; MAP_FAILED es el valor que devuelve mmap en caso de error (-1 como sin signo de 64 bits)
+%define MAP_FAILED -1
 
 section .bss
     terminal_winsize resw 4
@@ -126,8 +137,11 @@ fb_map:
     mov rax, SYS_MMAP
     syscall
 
-    cmp rax, 0
-    jl .cerrar_map
+    ; CORRECCIÓN: mmap devuelve MAP_FAILED (-1 sin signo, 0xFFFFFFFFFFFFFFFF) en error.
+    ; La comparación anterior con 'cmp rax, 0 / jl' era ambigua para punteros altos.
+    ; La forma canónica y correcta es comparar directamente contra -1.
+    cmp rax, MAP_FAILED
+    je .cerrar_map
     
     mov [r12 + ScreenInfo.ptr_mem], rax
     sys_close rbx
