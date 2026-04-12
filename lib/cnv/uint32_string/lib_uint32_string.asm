@@ -1,5 +1,5 @@
 ; ==============================================================================
-; RUTA: ./lib/cnv/lib_uint32_string.asm
+; RUTA: ./lib/cnv/uint32_string/lib_uint32_string.asm
 ; DESCRIPCIÓN: Convierte un uint32 a string en la BASE especificada.
 ;
 ; ENTRADA:
@@ -22,9 +22,10 @@ lib_uint32_string:
     mov rbp, rsp
     
     push rbx            ; Guardamos RBX (Callee-saved)
-    push rdi            ; Guardamos RDI (Buffer).
-                        ; En la pila: [RBP] -> [RBX] -> [RDI]
-                        ; Por tanto, RDI está en [RBP - 16]
+    ; CORRECCIÓN: Ya NO hacemos push rdi aquí.
+    ; En su lugar, guardamos el puntero al buffer en RBX para recuperarlo
+    ; después del bucle de división, sin interferir con los dígitos en pila.
+    mov rbx, rdi        ; RBX = Puntero al inicio del buffer (callee-saved, seguro)
 
     ; --- VALIDACIÓN DE BASE (CON LÍMITE SUPERIOR E INFERIOR) ---
     cmp edx, 2
@@ -40,7 +41,7 @@ lib_uint32_string:
 .preparar:
     mov eax, esi        ; EAX = Número a convertir (Dividendo)
     mov r8d, edx        ; R8D = Base (Divisor). Usamos R8 porque DIV destruye RDX
-    xor ebx, ebx        ; EBX = Contador de dígitos
+    xor ecx, ecx        ; ECX = Contador de dígitos (antes era EBX, ahora RBX está ocupado)
 
     ; --- BUCLE DE DIVISIÓN ---
 .bucle_division:
@@ -59,32 +60,32 @@ lib_uint32_string:
 
 .push_digito:
     push rdx            ; Guardamos el carácter en la pila
-    inc ebx             ; Aumentamos contador
+    inc ecx             ; Aumentamos contador
     
     test eax, eax       ; ¿Queda número?
     jnz .bucle_division ; Si cociente != 0, repetir
 
-    ; --- RECUPERACIÓN (CORRECCIÓN DEL ERROR) ---
-    ; NO hacemos 'pop rdi' aquí porque la pila está llena de dígitos.
-    ; Leemos el valor original directamente usando RBP.
-    mov rdi, [rbp - 16] ; Recuperamos la dirección inicial del buffer
-    mov rax, rdi        ; Preparamos valor de retorno
+    ; --- RECUPERACIÓN ---
+    ; CORRECCIÓN: RBX ya contiene la dirección del buffer desde el principio.
+    ; No necesitamos leer de [rbp-N] ni hacer pop de la pila de dígitos
+    ; para recuperarlo. Simplemente usamos RBX directamente.
+    mov rdi, rbx        ; RDI = Puntero al inicio del buffer
+    mov rax, rdi        ; RAX = Valor de retorno
 
     ; --- BUCLE DE ESCRITURA ---
 .escribir:
     pop rdx             ; Sacamos un dígito de la pila
     mov [rdi], dl       ; Escribimos en el buffer
     inc rdi             ; Avanzamos puntero del buffer
-    dec ebx             ; Decrementamos contador
+    dec ecx             ; Decrementamos contador
     jnz .escribir       ; Si quedan dígitos, repetir
 
     mov byte [rdi], 0   ; Terminador nulo al final
 
     ; --- EPÍLOGO ---
-    ; La pila ahora tiene [RBX] y [RDI] guardados.
-    ; Los dígitos ya se fueron.
-    pop rdi             ; Limpiamos el RDI que guardamos al principio
-    pop rbx             ; Restauramos el RBX original
+    ; CORRECCIÓN: Solo restauramos RBX. Ya no hay un 'pop rdi' espurio
+    ; que corrompía el frame extrayendo un valor inexistente de la pila.
+    pop rbx
     
     leave               ; Restaura RSP y RBP
     ret
