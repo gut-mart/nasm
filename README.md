@@ -4,7 +4,7 @@ El objetivo principal de este proyecto es proporcionar un entorno estructurado p
 
 El diseño del proyecto se centra en la creación modular de código de bajo nivel capaz de interactuar directamente con el kernel del sistema operativo (mediante syscalls). Para lograr esto, el entorno divide claramente la lógica reutilizable (librerías) de los programas finales (comandos). Como caso de uso actual, el entorno incluye herramientas para leer datos gráficos y mapear la memoria RAM de video a través del dispositivo /dev/fb0.
 
-📂 Arquitectura de Directorios
+� Arquitectura de Directorios
 El proyecto impone una estructura de carpetas estricta para mantener el código organizado y facilitar el proceso de construcción automatizado:
 
 
@@ -73,3 +73,77 @@ ms-vscode.cpptools (Para el soporte del depurador GDB).
 3. Uso Diario
 Simplemente crea un archivo .asm en comandos/. El sistema creará su Makefile. Presiona F12 en VS Code para disparar la limpieza de terminales, crear las carpetas necesarias y compilar el proyecto.
 +4
+---
+
+## Documentación y Mejoras (v0.1.0)
+
+Este proyecto incluye documentación completa y múltiples mejoras implementadas.
+
+### Recursos Principales
+
+- **[Documentación Técnica](docs/index.md)** - APIs de librerías y guías de uso
+- **[Mejoras Implementadas](IMPROVEMENTS.md)** - Resumen de cambios v0.1.0
+- **[Guía para Contribuyentes](CONTRIBUTING.md)** - Cómo colaborar en el proyecto
+- **[Mejores Prácticas](docs/BEST_PRACTICES.md)** - Convenciones de código y seguridad
+- **[Licencia MIT](LICENSE)** - Open source
+
+### Nuevas Características
+
+#### Testing Automatizado
+```bash
+make test              # Ejecutar suite de tests
+./tests/run_tests.sh   # O directamente
+```
+
+#### Targets de Makefile Mejorados
+```bash
+make help              # Mostrar ayuda
+make run               # Ejecutar binario compilado
+make install           # Instalar en /usr/local/bin
+make info              # Ver variables
+make test              # Ejecutar tests
+```
+
+#### Setup Multiplataforma
+```bash
+./setup.sh             # Detecta distro automáticamente
+                       # Soporta: Debian, Fedora, RHEL, Arch/Manjaro
+```
+
+#### Ejemplos Incluidos
+- `comandos/hello_world/` - Hola mundo básico
+- `comandos/count_numbers/` - Bucles e impresión
+- `comandos/fibonacci/` - Recursión y funciones
+
+#### Snippets VS Code
+Usa `Ctrl+Space` en archivos .asm para acceder a 15+ snippets:
+- `nasm_header` - Template de archivo
+- `syscall_template` - Llamada al sistema
+- `print_str`, `print_int`, `print_hex` - Impresión
+- `loop`, `cmp_jump` - Control de flujo
+- `fb_init` - Inicialización de framebuffer
+
+### Monitoreo de Cambios
+
+El servicio de monitoreo se configura automáticamente con `setup.sh`:
+
+```bash
+systemctl status monitor_asm.service   # Ver estado
+systemctl start monitor_asm.service    # Iniciar
+systemctl stop monitor_asm.service     # Detener
+```
+
+### CI/CD con GitHub Actions
+
+Los cambios se validan automáticamente en:
+- Múltiples versiones de NASM y GCC
+- Tests de compilación
+- Validación de scripts y Markdown
+
+Ver `.github/workflows/build.yml` para detalles.
+
+---
+
+**Versión:** 0.1.0
+**Última actualización:** 12 de abril, 2026
+**Estado:** Producción ✅
