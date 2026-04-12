@@ -12,18 +12,13 @@
     "workbench.iconTheme": "material-icon-theme",
 
     "files.exclude": {
-        "**/constants.inc": true,
-        "**/sys_macros.inc": true,
-        "**/.git": true,
-        "**/*.sh": true,
+        "**/bin": true,
         "**/build": true,
-        "**/revision.txt": true,
-        "Makefile": true,
-        ".gitignore": true,
-        "README.md": true,
-        "bin": true,
-        ".vscode": true,
-        "*.code-workspace": true
+        "**/*.o": true,
+        "**/*.d": true,
+        "**/.git": true,
+        "**/.DS_Store": true,
+        "**/Thumbs.db": true
     },
 
     "multiCommand.commands": [
