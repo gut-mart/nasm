@@ -35,7 +35,7 @@ LIB_DEPS = $(LIB_OBJS:.o=.d)
 NASMFLAGS = -f elf64 -g -F dwarf
 
 # Declaramos reglas que no son archivos para evitar colisiones
-.PHONY: all clean clean-all
+.PHONY: all clean clean-all test help install run
 
 all: $(EXEC)
 
@@ -70,3 +70,48 @@ clean-all:
 # Incluimos los archivos .d generados.
 # El guion '-' al principio evita que Make falle si los archivos .d aún no existen.
 -include $(DEP_MAIN) $(LIB_DEPS)
+
+# ==============================================================================
+# TARGETS ADICIONALES
+# ==============================================================================
+
+# Help: Mostrar información de targets disponibles
+help:
+	@echo "NASM Project - Targets disponibles:"
+	@echo ""
+	@echo "  make all               - Compilar el proyecto (por defecto)"
+	@echo "  make SRC=<archivo>     - Compilar un archivo específico"
+	@echo "  make clean             - Limpiar objeto y ejecutable actual"
+	@echo "  make clean-all         - Limpiar todo (rebuild completo)"
+	@echo "  make test              - Ejecutar suite de tests"
+	@echo "  make run               - Ejecutar el binario compilado"
+	@echo "  make install           - Instalar binario en /usr/local/bin"
+	@echo "  make help              - Mostrar esta ayuda"
+	@echo ""
+	@echo "Ejemplo:"
+	@echo "  make SRC=comandos/hello_world/hello_world.asm"
+
+# Test: Ejecutar suite de tests
+test:
+	@echo "Ejecutando tests..."
+	@bash tests/run_tests.sh
+
+# Run: Ejecutar el binario compilado
+run: $(EXEC)
+	@echo "Ejecutando $(EXEC)..."
+	@./$(EXEC)
+
+# Install: Instalar binario en sistema
+install: $(EXEC)
+	@echo "Instalando $(BASENAME) en /usr/local/bin..."
+	@sudo cp $(EXEC) /usr/local/bin/$(BASENAME)
+	@echo "Instalado: /usr/local/bin/$(BASENAME)"
+
+# Info: Mostrar variables de compilación
+info:
+	@echo "Variables de compilación:"
+	@echo "  BASENAME   = $(BASENAME)"
+	@echo "  EXEC       = $(EXEC)"
+	@echo "  SRC        = $(SRC)"
+	@echo "  LIB_SRCS   = $(LIB_SRCS)"
+	@echo "  LIB_OBJS   = $(LIB_OBJS)"
