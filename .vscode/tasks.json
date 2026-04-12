@@ -4,23 +4,26 @@
         {
             "label": "Construir Proyecto Actual",
             "type": "shell",
-            "command": "make clean && make SRC=${relativeFile}",
-       
-             "group": {
+            "command": "make SRC=${relativeFile}",
+            "group": {
                 "kind": "build",
                 "isDefault": true
             },
             "presentation": {
                 "reveal": "always",
                 "panel": "shared"
- 
             },
             "problemMatcher": "$gcc"
         },
         {
-            "label": "Limpiar Proyecto Actual",
+            "label": "Limpiar comando actual",
             "type": "shell",
-            "command": "make clean"
+            "command": "make clean SRC=${relativeFile}"
+        },
+        {
+            "label": "Limpiar TODO (lib incluida)",
+            "type": "shell",
+            "command": "make clean-all"
         }
     ]
 }
