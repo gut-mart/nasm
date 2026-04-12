@@ -1,3 +1,10 @@
+; ==============================================================================
+; RUTA: ./comandos/monitor/core/fb_core.asm
+; CORRECCIÓN: Lectura de argc/argv unificada a través de RBP.
+;             La alineación de pila ahora ocurre ANTES de leer cualquier argumento,
+;             garantizando consistencia y eliminando referencias mezcladas a RSP/RBP.
+; ==============================================================================
+
 %include "lib/constants.inc"
 %include "lib/sys_macros.inc"
 %include "lib/graph/core/lib_fb_core.inc"
@@ -56,17 +63,19 @@ section .text
     global _start
 
 _start:
-    ; 1. Procesar argumentos CLI (Lectura no destructiva)
-    mov rbx, [rsp]          ; Extraemos argc (cantidad de argumentos)
-    
-    ; --- ALINEACIÓN MAESTRA DE PILA (ABI) ---
-    mov rbp, rsp
-    and rsp, -16            
+    ; --- CORRECCIÓN: Establecemos el frame ANTES de leer argumentos ---
+    ; Así tanto argc como argv[N] se leen siempre a través de RBP,
+    ; que es estable e independiente de la alineación de RSP.
+    mov rbp, rsp        ; RBP = RSP original (pila sin alinear, con argc y argv)
+    and rsp, -16        ; Alineamos RSP al ABI antes de cualquier CALL
+
+    ; 1. Leer argumentos a través de RBP
+    mov rbx, [rbp]          ; argc
     
     cmp rbx, 2          
     jl modo_humano      
 
-    mov rdi, [rbp + 16]     ; Extraemos argv[1] 
+    mov rdi, [rbp + 16]     ; argv[1] 
     mov al, byte [rdi]
     cmp al, '-'         
     jne modo_humano     

@@ -1,3 +1,10 @@
+; ==============================================================================
+; RUTA: ./comandos/monitor/draw_rect/draw_rect.asm
+; CORRECCIÓN: Lectura de argv unificada. Todos los argumentos se leen a través
+;             de RBP (establecido ANTES de leerlos), eliminando la mezcla
+;             peligrosa entre referencias a RSP y RBP.
+; ==============================================================================
+
 %include "lib/constants.inc"
 %include "lib/sys_macros.inc"
 %include "lib/graph/core/lib_fb_core.inc"
@@ -49,13 +56,15 @@ section .text
     global _start
 
 _start:
-    ; 1. Extraer argumentos (CLI)
-    mov rbx, [rsp]          ; argc
-    mov r12, [rsp + 16]     ; argv[1] (X o -h)
-    
-    ; --- ALINEACIÓN MAESTRA DE PILA (ABI) ---
-    mov rbp, rsp
-    and rsp, -16            
+    ; --- CORRECCIÓN: Primero establecemos el frame de pila, LUEGO leemos args ---
+    ; De este modo TODAS las lecturas de argv se hacen a través de RBP,
+    ; que es estable y no cambia con la alineación posterior de RSP.
+    mov rbp, rsp        ; Guardamos RSP original en RBP
+    and rsp, -16        ; Alineamos la pila al ABI antes de cualquier CALL
+
+    ; 1. Extraer argumentos (CLI) — TODOS a través de RBP
+    mov rbx, [rbp]          ; argc
+    mov r12, [rbp + 16]     ; argv[1] (X o -h)
 
     ; 2. Comprobar si se pide ayuda
     cmp rbx, 2
@@ -75,23 +84,24 @@ _start:
     jne .error_args
 
     ; --- 3. CONVERSIÓN CON VALIDACIÓN (CVAL) ---
-    mov rdi, r12
+    ; CORRECCIÓN: Todos los argv leídos uniformemente desde RBP
+    mov rdi, r12                ; argv[1] = X
     call lib_string_int32cval
     mov dword [coord_x], eax
 
-    mov rdi, [rbp + 24]     ; Y
+    mov rdi, [rbp + 24]         ; argv[2] = Y
     call lib_string_int32cval
     mov dword [coord_y], eax
 
-    mov rdi, [rbp + 32]     ; W
+    mov rdi, [rbp + 32]         ; argv[3] = W
     call lib_string_int32cval
     mov dword [width], eax
 
-    mov rdi, [rbp + 40]     ; H
+    mov rdi, [rbp + 40]         ; argv[4] = H
     call lib_string_int32cval
     mov dword [height], eax
 
-    mov rdi, [rbp + 48]     ; Color
+    mov rdi, [rbp + 48]         ; argv[5] = Color
     call lib_string_int32cval
     mov dword [color], eax
 
