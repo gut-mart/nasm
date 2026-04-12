@@ -1,0 +1,85 @@
+name: Build and Test
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        nasm-version: ['2.14', '2.15', 'latest']
+        gcc-version: ['9', '10', '11']
+
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Install dependencies (NASM ${{ matrix.nasm-version }})
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential gdb nasm make inotify-tools
+        nasm -version
+        gcc --version
+    
+    - name: Create build directories
+      run: |
+        mkdir -p build bin
+    
+    - name: Build hello_world example
+      run: |
+        cd ${{ github.workspace }}
+        make SRC=comandos/hello_world/hello_world.asm
+    
+    - name: Build count_numbers example
+      run: |
+        cd ${{ github.workspace }}
+        make SRC=comandos/count_numbers/count_numbers.asm
+    
+    - name: Test hello_world
+      run: |
+        cd ${{ github.workspace }}
+        output=$(./bin/hello_world)
+        if echo "$output" | grep -q "Hola, Mundo"; then
+          echo "✓ hello_world test passed"
+        else
+          echo "✗ hello_world test failed"
+          exit 1
+        fi
+    
+    - name: Test count_numbers
+      run: |
+        cd ${{ github.workspace }}
+        output=$(./bin/count_numbers)
+        if echo "$output" | grep -q "Números del 1 al 10"; then
+          echo "✓ count_numbers test passed"
+        else
+          echo "✗ count_numbers test failed"
+          exit 1
+        fi
+    
+    - name: Run full test suite
+      run: |
+        cd ${{ github.workspace }}
+        bash tests/run_tests.sh
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Check Markdown formatting
+      uses: nosborn/github-action-markdown-cli@v3.3.0
+      with:
+        files: .
+        config_file: .markdownlint.json
+      continue-on-error: true
+    
+    - name: Validate shell scripts
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y shellcheck
+        shellcheck setup.sh tests/run_tests.sh || true
