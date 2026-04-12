@@ -1,5 +1,9 @@
 # ==============================================================================
 # RUTA: ./Makefile
+# CORRECCIÓN: Añadido '-F dwarf' a NASMFLAGS para que GDB pueda mapear
+#             instrucciones a líneas de código fuente correctamente.
+#             Sin este flag, el depurador de VS Code (launch.json) no puede
+#             mostrar el archivo .asm correspondiente durante la depuración.
 # ==============================================================================
 
 SRC ?= main.asm
@@ -22,8 +26,10 @@ LIB_SRCS = $(shell find lib -name '*.asm')
 LIB_OBJS = $(patsubst %.asm, $(BUILD_DIR)/%.o, $(LIB_SRCS))
 LIB_DEPS = $(LIB_OBJS:.o=.d)
 
-# Banderas globales para facilitar modificaciones futuras
-NASMFLAGS = -f elf64 -g
+# CORRECCIÓN: Añadido '-F dwarf' para emitir info de depuración en formato
+# DWARF, que es el estándar que GDB y VS Code esperan para leer símbolos y
+# mapear puntos de ruptura a líneas de fuente en archivos .asm.
+NASMFLAGS = -f elf64 -g -F dwarf
 
 # Declaramos reglas que no son archivos para evitar colisiones
 .PHONY: all clean
