@@ -28,6 +28,7 @@ Se espera que todos los colaboradores sean respetuosos y profesionales. Cualquie
 1. **Fork** el repositorio
 2. **Clone** tu fork localmente
 3. **Crea una rama** para tu cambio:
+
    ```bash
    git checkout -b feature/tu-descripcion
    ```

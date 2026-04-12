@@ -14,6 +14,7 @@ call print_string
 ```
 
 **Entrada:**
+
 - `RDI` = Puntero a cadena (terminada en 0x00)
 
 **Salida:** Ninguna (imprime en stdout)
@@ -26,6 +27,7 @@ call print_int
 ```
 
 **Entrada:**
+
 - `RDI` = Valor entero (interpretado como signed int64)
 
 **Salida:** Número convertido a ASCII impreso en stdout
@@ -38,6 +40,7 @@ call print_hex
 ```
 
 **Entrada:**
+
 - `RDI` = Valor a imprimir en hexadecimal
 
 **Salida:** Valor en formato 0x... impreso en stdout
@@ -90,7 +93,8 @@ _start:
 ```
 
 **Salida esperada:**
-```
+
+```text
 Valor numerico: 255
 Valor hexadecimal: 0xff
 ```

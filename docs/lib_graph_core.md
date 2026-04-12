@@ -3,6 +3,7 @@
 ## Descripción
 
 `lib_fb_core` es el núcleo de bajo nivel para manipulación de gráficos en ensamblador x86_64. Se encarga de:
+
 - Comunicación con el kernel Linux vía syscalls y ioctl
 - Extracción de metadatos del hardware (`/dev/fb0`)
 - Mapeo de memoria de video física al espacio de usuario mediante `mmap`
@@ -10,6 +11,7 @@
 ## Requisitos Previos
 
 ### Includes Obligatorios
+
 ```nasm
 %include "lib/constants.inc"
 %include "lib/sys_macros.inc"
@@ -18,10 +20,12 @@ default rel
 ```
 
 ### Privilegios
+
 - Requiere acceso de lectura/escritura a `/dev/fb0`
 - Típicamente necesita `sudo` o pertenecer al grupo `video`
 
 ### Reserva de Memoria
+
 ```nasm
 section .bss
     fb_datos resb ScreenInfo_size  ; 52 bytes obligatorios
@@ -30,7 +34,7 @@ section .bss
 ## Estructura de Datos: ScreenInfo (52 bytes)
 
 | Offset | Campo | Tipo | Descripción |
-|--------|-------|------|-------------|
+| -------- | ------- | ------ | ------------- |
 | 0-3 | `width` | u32 | Resolución horizontal (píxeles) |
 | 4-7 | `height` | u32 | Resolución vertical (píxeles) |
 | 8-11 | `bpp` | u32 | Bits por píxel (profundidad color) |
@@ -51,12 +55,15 @@ section .bss
 **Propósito:** Extrae metadatos del framebuffer físico.
 
 **Entrada:**
+
 - `RDI` = Puntero a estructura `ScreenInfo` reservada
 
 **Salida:**
+
 - `RAX` = 0 si éxito, < 0 si error
 
 **Ejemplo:**
+
 ```nasm
 mov rdi, fb_datos
 call fb_core
@@ -71,13 +78,16 @@ jl .error
 **Propósito:** Proyecta la RAM de video al espacio de usuario.
 
 **Entrada:**
+
 - `RDI` = Puntero a estructura `ScreenInfo` inicializada por `fb_core`
 
 **Salida:**
+
 - `RAX` = 0 si éxito, < 0 si error
 - El campo `ptr_mem` en la estructura se rellena con la dirección base
 
 **Ejemplo:**
+
 ```nasm
 mov rdi, fb_datos
 call fb_map
@@ -161,7 +171,7 @@ add r9, rsi                           ; r9 = &pixel
 ## Manejo de Errores Comunes
 
 | Código Error | Causa | Solución |
-|--------------|-------|----------|
+| -------------- | ------- | ---------- |
 | -1 | `/dev/fb0` no encontrado | Verificar drivers de gráficos |
 | -13 (EACCES) | Sin permisos | Ejecutar con `sudo` o agregar grupo `video` |
 | -22 (EINVAL) | Parámetros inválidos | Verificar estructura de datos |
