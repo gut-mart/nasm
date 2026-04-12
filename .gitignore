@@ -1,23 +1,56 @@
-# 1. Ignorar toda la carpeta build (donde van los objetos de librerías)
+# ==============================================================================
+# .gitignore - Archivos ignorados por Git
+# ==============================================================================
+
+# Directorios de build y binarios
 build/
 bin/
+dist/
+*.out
+*.elf
 
-# 2. Ignorar archivos objeto sueltos (*.o) en cualquier carpeta
-#    (Esto es vital ahora que generas .o junto a tu código)
+# Archivos objeto y dependencias
 *.o
+*.d
+*.a
 
-# 3. Ignorar archivos temporales o de sistema
-.DS_Store
+# VS Code
+.vscode/settings.json
+.vscode/launch.json
+.vscode/.history/
+
+# IDE y editores
+.idea/
 *.swp
+*.swo
 *~
-revision.txt
-# 4. Ignorar la carpeta de configuración local de VS Code (opcional pero recomendado)
-#.vscode/
+.DS_Store
 
-# Makefile
-# NOTA SOBRE EJECUTABLES:
-# Como en Linux los ejecutables no tienen extensión, es difícil ignorarlos todos automáticamente
-# sin ignorar carpetas por error.
-# REGLA DE ORO: Ejecuta la tarea "Limpiar Proyecto Actual" (make clean) antes de hacer un commit.
-# Ignorar Makefiles autogenerados en la carpeta comandos y subcarpetas
+# Archivos temporales y logs
+*.tmp
+*.temp
+*.log
+debug.txt
+.cache/
+
+# Makefiles autogenerados en carpetas de comandos
 comandos/**/Makefile
+
+# Depuración
+.gdbhistory
+core
+vgcore.*
+
+# Tests y resultados
+.test_output/
+test_results.txt
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# Información de proyecto local
+revision.txt
+contexto_IA.txt
