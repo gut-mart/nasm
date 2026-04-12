@@ -1,6 +1,7 @@
 ; ==============================================================================
 ; LIBRERÍA: lib_string_int32cval.asm
 ; DESCRIPCIÓN: Capa 1 (Escudo). Identifica prefijos y valida caracteres.
+; CORRECCIÓN: Añadido soporte para números negativos (signo '-' inicial).
 ; ==============================================================================
 
 default rel
@@ -21,6 +22,18 @@ lib_string_int32cval:
     test cl, cl
     jz .error           
 
+    ; --- CORRECCIÓN: Manejar signo negativo ---
+    ; Si el primer carácter es '-', lo saltamos para validar los dígitos,
+    ; pero mantenemos RBX apuntando al '-' para pasar la cadena completa
+    ; (con signo) a lib_string_int32fast al final.
+    cmp cl, '-'
+    jne .detectar_prefijo
+    inc rdi             ; Saltamos el '-'
+    mov cl, byte [rdi]  ; Leemos el siguiente carácter
+    test cl, cl
+    jz .error           ; Si la cadena es solo "-", es inválida
+
+.detectar_prefijo:
     cmp cl, '0'
     jne .val_dec        
 
@@ -117,6 +130,8 @@ lib_string_int32cval:
 
     ; --- DELEGACIÓN ---
 .exito:
+    ; Pasamos RBX (el puntero ORIGINAL, incluyendo el '-' si lo había)
+    ; a lib_string_int32fast para que gestione la conversión completa.
     mov rdi, rbx        
     pop rbx             
     leave               

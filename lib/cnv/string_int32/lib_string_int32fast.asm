@@ -1,6 +1,7 @@
 ; ==============================================================================
 ; LIBRERÍA: lib_string_int32fast.asm
 ; DESCRIPCIÓN: Capa 2 (Motor Rápido). Convierte String a Int32 según su prefijo.
+; CORRECCIÓN: Añadido soporte para números negativos (signo '-' inicial).
 ; ==============================================================================
 
 default rel
@@ -12,7 +13,18 @@ lib_string_int32fast:
     xor eax, eax        
     xor rcx, rcx        
 
+    ; --- CORRECCIÓN: Manejar signo negativo ---
+    ; Comprobamos si hay un '-' al inicio. Si lo hay, lo anotamos en R11
+    ; y avanzamos el puntero para procesar los dígitos normalmente.
+    xor r11d, r11d      ; R11D = 0 (bandera: sin signo negativo)
     mov cl, byte [rdi]
+    cmp cl, '-'
+    jne .detectar_prefijo
+    mov r11d, 1         ; R11D = 1 (bandera: número negativo)
+    inc rdi             ; Saltamos el '-'
+    mov cl, byte [rdi]  ; Leemos el primer dígito real
+
+.detectar_prefijo:
     cmp cl, '0'
     jne .bucle_dec      
 
@@ -104,4 +116,10 @@ lib_string_int32fast:
     jmp .bucle_dec
 
 .fin:
+    ; --- CORRECCIÓN: Aplicar negación si se detectó el signo '-' ---
+    test r11d, r11d
+    jz .retornar
+    neg eax             ; Negamos el resultado para obtener el valor negativo
+
+.retornar:
     ret
