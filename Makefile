@@ -4,6 +4,9 @@
 #             instrucciones a líneas de código fuente correctamente.
 #             Sin este flag, el depurador de VS Code (launch.json) no puede
 #             mostrar el archivo .asm correspondiente durante la depuración.
+# CORRECCIÓN: 'clean' ahora solo borra el ejecutable y objeto del comando actual,
+#             preservando libcore.a para compilación incremental.
+#             'clean-all' borra todo (usar solo si cambias código en lib/).
 # ==============================================================================
 
 SRC ?= main.asm
@@ -32,7 +35,7 @@ LIB_DEPS = $(LIB_OBJS:.o=.d)
 NASMFLAGS = -f elf64 -g -F dwarf
 
 # Declaramos reglas que no son archivos para evitar colisiones
-.PHONY: all clean
+.PHONY: all clean clean-all
 
 all: $(EXEC)
 
@@ -54,7 +57,14 @@ $(BUILD_DIR)/%.o: %.asm
 	@mkdir -p $(dir $@)
 	nasm $(NASMFLAGS) -MD $(@:.o=.d) $< -o $@
 
+# Limpia solo el ejecutable y objeto del comando actual.
+# Preserva libcore.a para que la siguiente compilación sea incremental.
 clean:
+	-rm -f $(EXEC) $(OBJ_MAIN) $(DEP_MAIN)
+
+# Limpia absolutamente todo (ejecutables, objetos y librería estática).
+# Usar solo cuando se modifica código dentro de lib/.
+clean-all:
 	-rm -rf $(BIN_DIR)/* $(BUILD_DIR)/*
 
 # Incluimos los archivos .d generados.
