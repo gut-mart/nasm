@@ -1,0 +1,144 @@
+{
+  "NASM File Header": {
+    "prefix": "nasm_header",
+    "body": [
+      "; ==============================================================================",
+      "; RUTA: ./${1:path/file.asm}",
+      "; DESCRIPCIÓN: ${2:descripción del módulo}",
+      "; ==============================================================================",
+      "",
+      "%include \"lib/constants.inc\"",
+      "%include \"lib/sys_macros.inc\"",
+      "",
+      "default rel",
+      "",
+      "extern ${3:funcion_externa}",
+      "",
+      "section .data",
+      "    ${4:; datos inicializados}",
+      "",
+      "section .bss",
+      "    ${5:; datos no inicializados}",
+      "",
+      "section .text",
+      "    global _start",
+      "",
+      "_start:",
+      "    ${6:; código principal}"
+    ],
+    "description": "Plantilla estándar de archivo NASM"
+  },
+  
+  "Syscall Template": {
+    "prefix": "syscall_template",
+    "body": [
+      "    mov rax, ${1:1}        ; Syscall number",
+      "    mov rdi, ${2:arg0}     ; Argumento 1",
+      "    mov rsi, ${3:arg1}     ; Argumento 2",
+      "    mov rdx, ${4:arg2}     ; Argumento 3",
+      "    syscall"
+    ],
+    "description": "Template para una llamada al sistema"
+  },
+  
+  "Exit Syscall": {
+    "prefix": "exit",
+    "body": "    sys_exit ${1:0}",
+    "description": "Salir del programa con código de retorno"
+  },
+  
+  "Print String": {
+    "prefix": "print_str",
+    "body": [
+      "    mov rdi, ${1:msg_variable}",
+      "    call print_string"
+    ],
+    "description": "Imprimir cadena de texto"
+  },
+  
+  "Print Integer": {
+    "prefix": "print_int",
+    "body": [
+      "    mov rdi, ${1:rax}",
+      "    call print_int"
+    ],
+    "description": "Imprimir número entero"
+  },
+  
+  "Print Hex": {
+    "prefix": "print_hex",
+    "body": [
+      "    mov rdi, ${1:rax}",
+      "    call print_hex"
+    ],
+    "description": "Imprimir valor hexadecimal"
+  },
+  
+  "Loop Template": {
+    "prefix": "loop",
+    "body": [
+      ".${1:loop_name}:",
+      "    ${2:; loop body}",
+      "    dec ${3:rcx}",
+      "    jnz .${1:loop_name}"
+    ],
+    "description": "Template para un bucle simple"
+  },
+  
+  "Conditional Jump": {
+    "prefix": "cmp_jump",
+    "body": [
+      "    cmp ${1:rax}, ${2:rbx}",
+      "    ${3:je} .${4:label}"
+    ],
+    "description": "Comparación y salto condicional"
+  },
+  
+  "Function Prologue": {
+    "prefix": "prologue",
+    "body": [
+      "${1:funcion_name}:",
+      "    push rbp",
+      "    mov rbp, rsp",
+      "    ${2:; función}"
+    ],
+    "description": "Prólogo de función estándar"
+  },
+  
+  "Function Epilogue": {
+    "prefix": "epilogue",
+    "body": [
+      "    mov rsp, rbp",
+      "    pop rbp",
+      "    ret"
+    ],
+    "description": "Epílogo de función estándar"
+  },
+  
+  "Framebuffer Init": {
+    "prefix": "fb_init",
+    "body": [
+      "%include \"lib/graph/core/lib_fb_core.inc\"",
+      "",
+      "section .bss",
+      "    fb_datos resb ScreenInfo_size",
+      "",
+      "section .text",
+      "    extern fb_core, fb_map",
+      "",
+      "    ; Inicializar framebuffer",
+      "    mov rdi, fb_datos",
+      "    call fb_core",
+      "    cmp rax, 0",
+      "    jl .error_fb",
+      "    ",
+      "    mov rdi, fb_datos",
+      "    call fb_map",
+      "    cmp rax, 0",
+      "    jl .error_fb",
+      "    ",
+      "    mov rsi, [fb_datos + ScreenInfo.ptr_mem]"
+    ],
+    "description": "Inicialización estándar del framebuffer"
+  }
+}
