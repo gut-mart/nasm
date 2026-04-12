@@ -1,0 +1,6 @@
+VERSION=0.1.0
+RELEASE_DATE=2026-04-12
+STATUS=development
+
+# Cambios:
+# v0.1.0 - Initial setup with documentation, examples, tests, and CI/CD
