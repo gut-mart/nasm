@@ -34,40 +34,36 @@ Esta conversación documenta la evolución del proyecto NASM (ensamblador x86_64
 - **Configuración VS Code**: `.vscode/settings.json` para ocultar archivos generados (bin/, build/, .o, .d).
 - **Normas Aplicadas**: Arquitectura de dos capas (funciones `cval` para validación, `fast` para rendimiento), delegación de traducción de color.
 
-### 4. **Commits y Versionado** (Sesiones 9-10)
-- **Commits Realizados**:
-  - `docs: agregar documentación completa y ejemplos`
-  - `test: implementar suite de testing automatizada`
-  - `ci: agregar workflow de GitHub Actions`
-  - `build: mejorar Makefile con nuevos targets`
-  - `style: corregir formato Markdown y configurar linter`
-- **Push a Remoto**: Todos los cambios subidos a GitHub (repositorio `gut-mart/nasm`).
-- **Normas Aplicadas**: Versionado semántico, convenciones de commit.
+### 5. **Implementación de Librería Gráfica de Líneas** (Sesión Actual)
+- **Nueva Librería**: `lib_draw_line` con capas `cval` (validación) y `fast` (Bresenham).
+- **Archivos Creados**: `lib/graph/draw/line/` con .asm, .inc, README.md y ejemplo `comandos/draw_line/`.
+- **Funcionalidades**: Dibujo de líneas rectas con validación de coordenadas.
+- **Normas Aplicadas**: Arquitectura de dos capas, integración con `lib_fb_core` y `lib_color_pack`.
+
+### 6. **Corrección de Sistema de Limpieza** (Sesión Actual)
+- **Problema**: `make clean` en subdirectorios eliminaba archivos incorrectos.
+- **Solución**: Agregado `SRC=$(PROJECT_SRC)` en todos los Makefiles de comandos.
+- **Archivos Corregidos**: 7 Makefiles en `comandos/`.
+- **Resultado**: Limpieza precisa por proyecto.
 
 ---
 
-## Decisiones Tomadas
-- **Mantener Código Muerto**: Librerías como `lib_file.asm` y `print_hex` no se eliminaron, ya que podrían tener utilidad futura (ej: I/O de archivos en expansiones).
-- **Enfoque en Rendimiento**: Se priorizó la filosofía de capas, con validación en wrappers y optimización en motores internos.
-- **Independencia de Hardware**: Colores siempre en RGB estándar, traducidos previamente.
-- **Configuración Minimalista**: Linter configurado para no interferir, archivos ocultos para claridad.
-
----
-
-## Estado Actual del Proyecto
-- **Archivos Totales**: ~50+ (fuente + generados).
-- **Funcionalidades**: Framebuffer completo, conversión de datos, impresión, gráficos básicos.
+## Estado Actual del Proyecto (Actualizado)
+- **Archivos Totales**: ~60+ (incluyendo nueva librería de líneas).
+- **Funcionalidades**: Framebuffer completo, conversión de datos, impresión, gráficos básicos + líneas.
 - **Testing**: 9 tests pasando, CI/CD activo.
 - **Documentación**: Completa en `docs/`, con ejemplos ejecutables.
 - **Deuda Técnica**: Soporte multi-BPP pendiente (16/24-bit), como se indica en `contexto_IA.txt`.
+- **Últimos Commits**: Implementación de líneas, corrección de Makefiles.
 
 ---
 
-## Próximos Pasos Sugeridos
+## Próximos Pasos Sugeridos (Actualizado)
 - **Monitoreo**: Verificar ejecución de CI/CD en GitHub Actions.
-- **Expansión**: Implementar soporte multi-BPP si se requiere.
+- **Expansión**: Implementar soporte multi-BPP o nuevas primitivas gráficas (círculos, texto).
 - **Mantenimiento**: Actualizar documentación si se agregan nuevas librerías.
 - **Normas a Recordar**: Siempre usar capas de validación/rendimiento, traducción previa de colores, y syscalls limpios.
+- **Recordatorio**: Actualizar este log al final de cada sesión.
 
 ---
 
