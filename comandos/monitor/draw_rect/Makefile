@@ -1,6 +1,6 @@
 ROOT_DIR = ../../..
-PROJECT_SRC = comandos/monitor/core/fb_core.asm
-EXEC_NAME = fb_core
+PROJECT_SRC = comandos/monitor/draw_rect/draw_rect.asm
+EXEC_NAME = draw_rect
 
 all:
 	@$(MAKE) --no-print-directory -C $(ROOT_DIR) SRC=$(PROJECT_SRC)
