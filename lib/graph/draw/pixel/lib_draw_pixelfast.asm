@@ -1,6 +1,10 @@
 ; ==============================================================================
 ; LIBRERÍA: lib_draw_pixelfast.asm
 ; DESCRIPCIÓN: Capa 2 (Motor). Dibuja un píxel asumiendo coordenadas perfectas.
+; CORRECCIÓN: El offset X (R10) ahora se suma al offset Y (RAX) antes de
+;             escribir en memoria. Antes solo se usaba el offset Y, lo que
+;             provocaba que todos los píxeles cayeran en la columna X=0.
+; NOTA: Asume bpp=32 (4 bytes por píxel) en la escritura final.
 ; ==============================================================================
 
 %include "lib/graph/core/lib_fb_core.inc"
@@ -30,10 +34,11 @@ lib_draw_pixelfast:
     movsxd r10, esi             ; Extensión a 64 bits de X
     imul r10, r9                ; R10 = X * Bytes por píxel
 
-    ; 3. Dirección Absoluta y Escritura
-    add rax, r10                ; RAX = Offset Total en Bytes
+    ; 3. Combinar offsets X e Y en el offset total
+    add rax, r10                ; RAX = (Y * pitch) + (X * Bpp) = offset total
+
+    ; 4. Dirección Absoluta y Escritura
     mov r11, qword [rdi + ScreenInfo.ptr_mem] 
-    
     mov dword [r11 + rax], ecx  ; Escribir los 4 bytes de color directamente
 
     ret

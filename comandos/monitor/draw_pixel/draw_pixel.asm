@@ -1,3 +1,11 @@
+; ==============================================================================
+; RUTA: ./comandos/monitor/draw_pixel/draw_pixel.asm
+; CORRECCIÓN: Lectura de argc/argv unificada a través de RBP. La alineación
+;             de pila ahora ocurre ANTES de leer cualquier argumento, igual
+;             que en fb_core.asm y draw_rect.asm. Esto garantiza consistencia
+;             y elimina la mezcla de referencias entre RSP y RBP.
+; ==============================================================================
+
 %include "lib/constants.inc"
 %include "lib/sys_macros.inc"
 %include "lib/graph/core/lib_fb_core.inc"
@@ -50,15 +58,17 @@ section .text
     global _start
 
 _start:
-    ; 1. Extraer argumentos (CLI)
-    mov rbx, [rsp]          ; argc
-    mov r12, [rsp + 16]     ; argv[1] (X o -h)
-    mov r13, [rsp + 24]     ; argv[2] (Y)
-    mov r14, [rsp + 32]     ; argv[3] (Color)
+    ; --- CORRECCIÓN: Primero establecemos el frame de pila, LUEGO leemos args ---
+    ; Así TODAS las lecturas de argv se hacen a través de RBP, que es estable
+    ; y no cambia con la alineación posterior de RSP.
+    mov rbp, rsp        ; RBP = RSP original (pila sin alinear, con argc y argv)
+    and rsp, -16        ; Alineamos RSP al ABI antes de cualquier CALL
 
-    ; --- ALINEACIÓN MAESTRA DE PILA (ABI) ---
-    mov rbp, rsp
-    and rsp, -16            
+    ; 1. Extraer argumentos (CLI) — TODOS a través de RBP
+    mov rbx, [rbp]          ; argc
+    mov r12, [rbp + 16]     ; argv[1] (X o -h)
+    mov r13, [rbp + 24]     ; argv[2] (Y)
+    mov r14, [rbp + 32]     ; argv[3] (Color)
 
     ; 2. Comprobar si se pide ayuda
     cmp rbx, 2
@@ -100,11 +110,13 @@ _start:
     call fb_map
     cmp rax, 0
     jl .error_fb
+
     ; --- 4.5 TRADUCCIÓN AL HARDWARE NATIVO ---
     mov rdi, datos_fb
     mov esi, dword [color]      ; Le pasamos el color estándar del usuario
     call lib_color_pack         ; EAX devuelve el color perfecto para tu PC
     mov dword [color], eax      ; Actualizamos la variable con el color nativo
+
     ; --- 5. DIBUJAR PÍXEL (CAPA SEGURA) ---
     mov rdi, datos_fb
     mov esi, dword [coord_x]

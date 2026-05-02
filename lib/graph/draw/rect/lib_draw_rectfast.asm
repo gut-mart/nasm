@@ -2,6 +2,12 @@
 ; LIBRERÍA: lib_draw_rectfast.asm
 ; DESCRIPCIÓN: Capa 2 (Motor). Escribe un bloque rectangular en memoria.
 ;              Algoritmo de escritura lineal sin llamadas a funciones.
+; CORRECCIÓN: Añadida protección defensiva contra W=0 y H=0. Antes, si entraba
+;             con cualquiera de los dos a 0, el `dec / jnz` provocaba un bucle
+;             de ~4.000 millones de iteraciones que escribía fuera de los
+;             límites del framebuffer (kernel oops potencial).
+; LIMITACIÓN CONOCIDA: Asume bpp=32 (4 bytes por píxel). No usar con
+;             framebuffers de 16 o 24 bits.
 ; ==============================================================================
 
 %include "lib/graph/core/lib_fb_core.inc"
@@ -15,6 +21,15 @@ section .text
 ; ABI: RDI (ScreenInfo), ESI (X), EDX (Y), ECX (W), R8D (H), R9D (Color)
 ; ------------------------------------------------------------------------------
 lib_draw_rectfast:
+    ; --- 0. PROTECCIÓN DEFENSIVA ---
+    ; Si W=0 o H=0, no hay nada que dibujar. Salir sin tocar memoria.
+    ; Esto evita que un dec/jnz con contador 0 entre en un bucle de
+    ; ~2^32 iteraciones que escribiría fuera del framebuffer.
+    test ecx, ecx
+    jz .salir
+    test r8d, r8d
+    jz .salir
+
     ; 1. Calcular el Offset Inicial (Memoria del píxel top-left)
     movsxd rax, edx                 ; RAX = Y
     movsxd r11, dword [rdi + ScreenInfo.pitch] 
@@ -45,5 +60,6 @@ lib_draw_rectfast:
     add r10, r11                    ; Avanzar el puntero a la siguiente fila real
     dec r8d
     jnz .bucle_y                    ; Repetir hasta completar el Alto (H)
-    
+
+.salir:
     ret
