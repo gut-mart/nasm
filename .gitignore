@@ -2,55 +2,66 @@
 # .gitignore - Archivos ignorados por Git
 # ==============================================================================
 
-# Directorios de build y binarios
+# --- Directorios de build y binarios ---
 build/
 bin/
 dist/
 *.out
 *.elf
 
-# Archivos objeto y dependencias
+# --- Archivos objeto y dependencias ---
 *.o
 *.d
 *.a
 
-# VS Code
-.vscode/settings.json
+# --- VS Code: solo archivos personales del desarrollador ---
+# settings.json y tasks.json SÍ se versionan (son útiles para todos).
+# launch.json contiene la IP del equipo remoto de cada usuario;
+# se distribuye launch.example.json como plantilla.
 .vscode/launch.json
 .vscode/.history/
 
-# IDE y editores
+# --- IDE y editores ---
 .idea/
 *.swp
 *.swo
 *~
 .DS_Store
 
-# Archivos temporales y logs
+# --- Archivos temporales y logs ---
 *.tmp
 *.temp
 *.log
 debug.txt
 .cache/
 
-# Makefiles autogenerados en carpetas de comandos
+# --- Configuración local del usuario ---
+# Cada desarrollador define aquí su IP de despliegue, alias SSH, etc.
+# Ver config.example.mk como plantilla.
+config.local.mk
+
+# --- Makefiles autogenerados en carpetas de comandos ---
+# Son derivados del .asm correspondiente. Los regenera setup.sh durante
+# la instalación (vía bootstrap de monitor_comandos.sh) y monitor_comandos.sh
+# los mantiene actualizados si se ejecuta como watcher.
 comandos/**/Makefile
 
-# Depuración
+# --- Depuración ---
 .gdbhistory
 core
 vgcore.*
 
-# Tests y resultados
+# --- Tests y resultados ---
 .test_output/
 test_results.txt
 
-# Python
+# --- Python ---
 __pycache__/
 *.pyc
 *.pyo
 .pytest_cache/
 
-# Información de proyecto local
+# --- Información de proyecto local ---
+# Reportes generados para revisiones (empaquetar.sh) o para enviar a IA.
 revision.txt
 contexto_IA.txt
