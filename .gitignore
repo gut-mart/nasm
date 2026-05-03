@@ -18,7 +18,7 @@ dist/
 # settings.json y tasks.json SÍ se versionan (son útiles para todos).
 # launch.json contiene la IP del equipo remoto de cada usuario;
 # se distribuye launch.example.json como plantilla.
-.vscode/launch.json
+
 .vscode/.history/
 
 # --- IDE y editores ---
