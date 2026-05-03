@@ -68,6 +68,15 @@ cp config.example.mk config.local.mk
 nano config.local.mk
 ```
 
+Para que VS Code pueda conectarse al equipo remoto al pulsar F5, define la
+variable de entorno con la IP del equipo (en `~/.bashrc` o equivalente):
+
+```bash
+export NASM_REMOTE_HOST=192.168.1.158
+```
+
+Tras añadir la variable, reinicia VS Code para que la lea.
+
 Uso diario:
 
 ```bash
@@ -120,10 +129,10 @@ permitir depuración por línea de código fuente con GDB.
 
 - **Local:** abre el binario con `gdb ./bin/draw_pixel` o usa la
   configuración "Depurar Local (GDB)" en VS Code (F5).
-- **Remoto:** `make deploy` arranca un `gdbserver` en el equipo remoto.
-  En VS Code, copia `.vscode/launch.example.json` a `.vscode/launch.json`
-  y ajusta la IP del equipo remoto. Luego F5 con la configuración
-  "Depurar Remoto".
+- **Remoto:** `make deploy` arranca un `gdbserver` en el equipo remoto. En VS
+  Code, selecciona la configuración "Depurar Remoto (SSH + gdbserver)" y
+  pulsa F5. Requiere haber definido la variable de entorno
+  `NASM_REMOTE_HOST` con la IP del equipo remoto.
 
 ## Filosofía del proyecto
 
