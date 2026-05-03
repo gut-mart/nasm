@@ -15,10 +15,10 @@ dist/
 *.a
 
 # --- VS Code: solo archivos personales del desarrollador ---
-# settings.json y tasks.json SÍ se versionan (son útiles para todos).
-# launch.json contiene la IP del equipo remoto de cada usuario;
-# se distribuye launch.example.json como plantilla.
-
+# settings.json, launch.json, tasks.json y extensions.json se versionan.
+# launch.json no contiene datos personales (la IP remota se lee de la
+# variable de entorno NASM_REMOTE_HOST). Solo se ignora la carpeta de
+# historial de cambios local.
 .vscode/.history/
 
 # --- IDE y editores ---
