@@ -65,3 +65,8 @@ __pycache__/
 # Reportes generados para revisiones (empaquetar.sh) o para enviar a IA.
 revision.txt
 contexto_IA.txt
+# --- Scripts del mantenedor ---
+# Carpeta personal del mantenedor: scripts y herramientas que no aportan
+# valor a usuarios del repo y suelen contener rutas/configuraciones
+# personales. Ver scripts/maintainer/README.md (local) si la carpeta existe.
+scripts/maintainer/
