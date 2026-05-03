@@ -1,149 +1,108 @@
-# Contribuyendo al Proyecto NASM
+# Cómo contribuir
 
-¡Gracias por tu interés en contribuir a este proyecto! Las contribuciones son bienvenidas. A continuación se detalla el proceso.
+Antes de nada: gracias por interesarte en este proyecto. Esto no es una
+biblioteca seria con departamento de mantenimiento — es un proyecto personal
+de aprendizaje de NASM. Eso significa que las contribuciones son bienvenidas,
+pero también que el ritmo y los criterios son los de un proyecto pequeño.
 
-## Código de Conducta
+## Antes de invertir tu tiempo
 
-Se espera que todos los colaboradores sean respetuosos y profesionales. Cualquier comportamiento inapropiado será reportado y tratado con seriedad.
+Si quieres proponer un cambio grande (un comando nuevo, refactor de una
+librería, cambio de arquitectura), **abre un issue antes** de ponerte a
+codificar. Así evitamos que escribas algo que luego no encaje con la dirección
+del proyecto.
 
-## Cómo Contribuir
+Para fixes pequeños y bugs evidentes, no hace falta — manda directamente el
+Pull Request.
 
-### Reportar Bugs
+## Reportar un bug
 
-1. Abre un issue en GitHub con el prefijo `[BUG]`
-2. Describe el problema con claridad
-3. Proporciona los pasos para reproducir
-4. Incluye información del sistema (distro, versión de NASM, GCC)
-5. Adjunta logs o capturas si es relevante
+Abre un issue con esta información:
 
-### Proponer Características
+- Qué hiciste (los comandos exactos).
+- Qué esperabas que pasara.
+- Qué pasó en realidad.
+- Distribución y versión de NASM (`nasm --version`).
+- Si afecta al hardware: modelo del equipo y resolución del framebuffer
+  (`fbset` en el equipo afectado).
 
-1. Abre un issue en GitHub con el prefijo `[FEATURE]`
-2. Describe la característica propuesta
-3. Explica el caso de uso
-4. Proporciona ejemplos si es posible
+Adjunta la salida tal cual, no la resumas. Los detalles importan.
 
-### Hacer Pull Requests
+## Hacer un Pull Request
 
-1. **Fork** el repositorio
-2. **Clone** tu fork localmente
-3. **Crea una rama** para tu cambio:
+El flujo estándar:
 
-   ```bash
-   git checkout -b feature/tu-descripcion
-   ```
-4. **Realiza tus cambios** siguiendo las convenciones del proyecto
-5. **Prueba** tus cambios:
-   ```bash
-   make clean-all
-   make SRC=tu_nuevo_comando.asm
-   ./bin/tu_nuevo_comando
-   ```
-6. **Ejecuta los tests**:
-   ```bash
-   bash tests/run_tests.sh
-   ```
-7. **Commit** con mensajes claros:
-   ```bash
-   git commit -m "Feature: Descripción clara del cambio"
-   ```
-8. **Push** a tu fork:
-   ```bash
-   git push origin feature/tu-descripcion
-   ```
-9. **Abre un Pull Request** describiendo tus cambios
+1. Fork del repo.
+2. Rama nueva: `git checkout -b fix/descripcion-corta`.
+3. Tus cambios.
+4. Probar que compila: `make clean-all && make SRC=ruta/al/archivo.asm`.
+5. Probar que los tests pasan: `make test`.
+6. Si el cambio afecta al framebuffer, probarlo visualmente en hardware real.
+7. Commit con mensaje claro (ver convenciones abajo).
+8. Push a tu fork.
+9. Pull Request describiendo el cambio.
 
-## Convenciones de Código
+## Convenciones de código
 
 ### Ensamblador
 
-- **Archivos:** Usa extensión `.asm`
-- **Comentarios:** En español o inglés (consistentemente)
-- **Formato:**
+- Comentarios en español (igual que el resto del proyecto).
+- Cabecera de archivo con la ruta y una descripción corta:
   ```nasm
-  ; Sección principal (máx 80 caracteres en bucles)
-  mov rax, rbx        ; Comenta el propósito
-  call funcion
+  ; ==============================================================================
+  ; RUTA: ./lib/algo/lib_algo.asm
+  ; DESCRIPCIÓN: Una frase explicando qué hace.
+  ; ==============================================================================
   ```
-- **Indentación:** Tab = 4 espacios
-- **Nombres:**
-  - Funciones: `snake_case` en minúsculas
-  - Etiquetas locales: `.nombre_local`
-  - Constantes: `MAYUSCULAS_SEPARADAS_POR_GUION`
-- **Estructura de archivo:**
-  ```nasm
-  ; Encabezado con ruta y descripción
-  %include "lib/constants.inc"
-  %include "lib/sys_macros.inc"
-  
-  default rel
-  
-  extern funcion_externa
-  
-  section .data
-      ; datos inicializados
-  
-  section .bss
-      ; datos no inicializados
-  
-  section .text
-      global funcion_exportada
-  ```
+- Nombres de funciones globales: `snake_case` minúscula, con prefijo `lib_`
+  si es de librería.
+- Etiquetas locales: `.snake_case`.
+- Indentación con 4 espacios o 1 tab (consistente dentro del archivo).
+- Si añades una función pública, documenta los registros de entrada y salida
+  encima de la función.
 
 ### Bash
 
-- Usa `#!/bin/bash` al inicio
-- Comenta funciones complejas
-- Maneja errores con `set -e`
+- `#!/bin/bash` al inicio.
+- `set -e` si el script no debe seguir tras un error.
+- Comentarios en cabecera explicando qué hace.
 
-### Markdown
+### Mensajes de commit
 
-- Usa markdown limpio y consistente
-- Títulos con `#` (no more de 3 niveles)
-- Código en bloques con ` ``` `
-
-## Estructura de Directorios
-
-Al agregar nuevas librerías o comandos:
+Estilo "Conventional Commits" simplificado:
 
 ```
-lib/componentes/nombre_lib/
-├── lib_nombre_lib.asm      ; Implementación
-├── lib_nombre_lib.inc       ; Headers (constantes, offsets)
-└── README.md               ; Documentación
+tipo(ámbito): resumen corto en imperativo
 
-comandos/categoria/nombre_cmd/
-├── nombre_cmd.asm          ; Implementación
-└── Makefile                ; Generado automáticamente
+Detalles si hacen falta. Qué cambia y por qué.
 ```
 
-## Testing
+Tipos comunes: `fix`, `feat`, `docs`, `chore`, `refactor`. Ámbito opcional.
 
-- Cada nueva funcionalidad debe tener un test en `tests/`
-- Ejecuta `make test` antes de hacer commit
-- Prueba en múltiples escenarios (con/sin argumentos, valores límite)
+Ejemplos reales del proyecto:
 
-## Documentación
+- `fix(graph): corregir offset X en pixelfast`
+- `chore: sanear repositorio - quitar archivos que deben ignorarse`
+- `feat(build): parametrizar despliegue remoto vía config.local.mk`
 
-- Actualiza `docs/` cuando cambies APIs públicas
-- Cada librería debe tener documentación en Markdown
-- Incluye ejemplos de uso
+## Reglas no negociables
 
-## Versioning
+Estas son las decisiones de diseño del proyecto. Las contribuciones que las
+rompan no se aceptarán:
 
-El proyecto usa [Semantic Versioning](https://semver.org/):
-- `MAJOR.MINOR.PATCH` (ej: 1.2.3)
-- Mayor: cambios incompatibles
-- Menor: nuevas características compaibles
-- Patch: fixes de bugs
+1. **Sin librerías externas.** Nada de libc, nada de SDL, nada de printf.
+   Solo syscalls Linux directas. Es la razón de ser del proyecto.
+2. **x86_64 Linux.** No hay planes de portar a otras arquitecturas.
+3. **Pruebas reales en hardware sin entorno gráfico.** El framebuffer no
+   funciona bien con Wayland/X corriendo. Las pruebas que tocan `/dev/fb0`
+   deben hacerse desde TTY o por SSH a un equipo headless.
 
 ## Licencia
 
-Al contribuir, aceptas que tu código sea licenciado bajo MIT (ver LICENSE).
+Al contribuir aceptas que tu código se distribuya bajo la licencia MIT
+del proyecto. No hay CLA ni paperwork, basta con que mandes el PR.
 
-## Preguntas
+## Dudas
 
-- **Dudas técnicas:** Abre un issue con tag `[QUESTION]`
-- **Contacto:** Consulta el README
-
-¡Gracias por contribuir!
+Abre un issue con la etiqueta `[QUESTION]` o pregunta directamente en el
+PR si surge sobre la marcha.

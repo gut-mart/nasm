@@ -1,72 +1,139 @@
 # Entorno NASM para Linux
 
-## Propósito del Proyecto
+Proyecto personal de aprendizaje y experimentación con ensamblador x86_64 en
+Linux. La idea es crear pequeñas librerías reutilizables escritas íntegramente
+en NASM, sin depender de libc ni de ninguna otra librería externa, y dibujar
+directamente sobre el framebuffer del kernel (`/dev/fb0`).
 
-Este proyecto ofrece un entorno estructurado para la experimentación y el aprendizaje de ensamblador x86_64 con NASM en Linux.
-
-El diseño separa claramente la lógica reutilizable de las librerías (`lib/`) de los programas ejecutables (`comandos/`). El objetivo principal es facilitar la creación de código de bajo nivel que interactúe directamente con el kernel mediante syscalls, con un enfoque práctico en gráficos y framebuffer.
-
-## Documentación y mejoras
-
-- **[Documentación principal](docs/index.md)**
-- **[Guía de contribuciones](CONTRIBUTING.md)**
-- **[Mejores prácticas](docs/BEST_PRACTICES.md)**
-- **[Resumen de mejoras](IMPROVEMENTS.md)**
-- **[Licencia MIT](LICENSE)**
-
-## Arquitectura de directorios
-
-- `lib/`: Librerías NASM reutilizables, empaquetadas en `build/libcore.a`.
-- `comandos/`: Programas individuales que usan las librerías.
-- `build/`: Archivos objeto y dependencias generados.
-- `bin/`: Ejecutables finales.
-- `docs/`: Documentación técnica.
-
-## Flujo de trabajo
-
-1. Crea un archivo `.asm` en `comandos/`.
-2. Compila con `make SRC=comandos/tu_comando/tu_comando.asm`.
-3. Ejecuta el binario resultante en `bin/`.
-4. Usa `make test` para validar la suite de pruebas.
+El proyecto está pensado para ejecutarse en máquinas Linux **sin entorno
+gráfico** (TTY pura o equipo headless). Soporta dos modos de desarrollo:
+trabajar todo en el mismo equipo, o editar en un equipo principal y depurar
+remotamente vía SSH/GDB en un equipo de pruebas dentro de la misma red.
 
 ## Requisitos
 
-- NASM
-- GCC
-- Make
-- GDB
-- inotify-tools (opcional, para monitoreo automático)
+- Linux x86_64.
+- NASM, `ld`, GDB, `make`.
+- Acceso a `/dev/fb0` (necesita `sudo` o pertenecer al grupo `video`).
+- **Importante:** el framebuffer no es accesible mientras hay un compositor
+  gráfico activo (Wayland, Xorg). Para ver los píxeles dibujados, ejecuta
+  desde una TTY (Ctrl+Alt+F2/F3) o desde un equipo sin entorno gráfico.
 
-## Comandos útiles
+Limitación conocida: las funciones de dibujado actuales asumen un framebuffer
+de 32 bits por píxel. En 16 o 24 bpp no funcionarán correctamente.
+Ver [TODO.md](TODO.md).
 
-- `make help`
-- `make test`
-- `make run`
-- `make install`
-- `make clean`
-- `make clean-all`
+## Estructura del proyecto
 
-## Setup multiplataforma
+```
+lib/             Librerías NASM reutilizables (se empaquetan en libcore.a)
+  cnv/           Conversiones (string ↔ entero)
+  graph/         Gráficos: framebuffer, color, dibujado
+  io/            Entrada/salida básica
+comandos/        Programas ejecutables que usan las librerías
+  monitor/       Comandos relacionados con el framebuffer
+tests/           Suite de tests
+```
 
-Ejecuta `./setup.sh` para instalar dependencias y configurar el entorno en:
-- Ubuntu/Debian
-- Fedora
-- RHEL/CentOS
-- Arch/Manjaro
+## Modos de uso
 
-## Ejemplos incluidos
+### Modo local: una sola máquina sin entorno gráfico
 
-- `comandos/hello_world/`
-- `comandos/count_numbers/`
-- `comandos/fibonacci/`
-- `comandos/monitor/`
+Si trabajas directamente en una máquina Linux sin compositor gráfico (TTY
+pura, o servidor headless), todo el flujo cabe en una sola sesión:
 
-## Extensiones recomendadas para VS Code
+```bash
+git clone https://github.com/gut-mart/nasm.git
+cd nasm
+./setup.sh
+make SRC=comandos/monitor/draw_pixel/draw_pixel.asm
+sudo ./bin/draw_pixel 100 100 0xFF0000
+```
 
-- `ryuta46.multi-command`
-- `ms-vscode.cpptools`
-- `13xforever.language-x86-64-assembly`
+### Modo remoto: equipo gráfico + equipo headless por SSH
 
-## CI/CD
+Es el flujo principal del autor. Se edita y compila en un equipo con entorno
+gráfico, y se ejecuta el binario por SSH en un equipo headless dentro de la
+misma red WiFi.
 
-El proyecto incluye un workflow de GitHub Actions en `.github/workflows/build.yml` que valida compilación y tests.
+Configuración inicial (una sola vez):
+
+```bash
+git clone https://github.com/gut-mart/nasm.git
+cd nasm
+./setup.sh
+
+# Tu config personal: alias SSH, ruta remota, puerto de gdbserver
+cp config.example.mk config.local.mk
+nano config.local.mk
+```
+
+Uso diario:
+
+```bash
+make deploy SRC=comandos/monitor/draw_pixel/draw_pixel.asm
+# Compila localmente, copia el binario al equipo remoto via scp
+# y arranca gdbserver para depuración con VS Code.
+```
+
+Para ejecutar sin depurar (sin gdbserver), conéctate por SSH y ejecuta
+manualmente:
+
+```bash
+ssh tu_equipo_remoto
+sudo ./draw_pixel 100 100 0xFF0000
+```
+
+`config.local.mk` está en `.gitignore`, no se sube al repositorio.
+
+## Comandos disponibles
+
+Los comandos viven en `comandos/monitor/`. Cada uno acepta `-h` para ver su
+ayuda.
+
+| Comando | Descripción |
+|---|---|
+| `fb_core` | Diagnóstico del framebuffer (resolución, bpp, offsets de color). |
+| `draw_pixel` | Dibuja un píxel en (X, Y) del color indicado. |
+| `draw_rect` | Dibuja un rectángulo sólido con clipping inteligente. |
+
+Cada comando soporta argumentos numéricos en decimal, hexadecimal (`0x...`),
+binario (`0b...`) y octal (`0o...`).
+
+## Targets del Makefile
+
+```bash
+make SRC=<ruta.asm>      # Compila un archivo específico
+make clean               # Limpia el binario y objeto del comando actual
+make clean-all           # Limpia todo (incluida libcore.a)
+make test                # Ejecuta la suite de tests
+make run                 # Ejecuta el binario compilado localmente
+make deploy SRC=<...>    # Compila y despliega en equipo remoto (modo SSH)
+make info                # Muestra la configuración actual
+make help                # Muestra esta ayuda
+```
+
+## Depuración
+
+El proyecto compila siempre con símbolos DWARF (`-g -F dwarf` en NASM) para
+permitir depuración por línea de código fuente con GDB.
+
+- **Local:** abre el binario con `gdb ./bin/draw_pixel` o usa la
+  configuración "Depurar Local (GDB)" en VS Code (F5).
+- **Remoto:** `make deploy` arranca un `gdbserver` en el equipo remoto.
+  En VS Code, copia `.vscode/launch.example.json` a `.vscode/launch.json`
+  y ajusta la IP del equipo remoto. Luego F5 con la configuración
+  "Depurar Remoto".
+
+## Filosofía del proyecto
+
+- **Sin librerías externas.** Solo syscalls Linux directas. Nada de libc.
+- **x86_64 Linux exclusivamente.** Sin objetivo de portabilidad.
+- **Pequeñas librerías reutilizables.** Cada librería tiene una sola
+  responsabilidad y se compone con las demás.
+- **Pruebas reales en hardware sin entorno gráfico.** El framebuffer es
+  hardware real, no se simula.
+
+## Licencia
+
+[MIT](LICENSE) © 2026 gut-mart
