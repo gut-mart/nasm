@@ -72,7 +72,7 @@ Para que VS Code pueda conectarse al equipo remoto al pulsar F5, define la
 variable de entorno con la IP del equipo (en `~/.bashrc` o equivalente):
 
 ```bash
-export NASM_REMOTE_HOST=192.168.1.158
+export NASM_REMOTE_HOST=192.168.1.X   # sustituye por la IP real de tu equipo remoto
 ```
 
 Tras añadir la variable, reinicia VS Code para que la lea.

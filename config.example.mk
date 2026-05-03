@@ -17,7 +17,7 @@
 # Alias definido en tu ~/.ssh/config, o bien usuario@host directamente.
 # Ejemplos válidos:
 #   PC_DESTINO = mi_alias_ssh
-#   PC_DESTINO = isidro@192.168.1.158
+#   PC_DESTINO = usuario@192.168.1.X
 PC_DESTINO = mi_equipo_remoto
 
 # --- Carpeta donde se copia el binario en el equipo remoto ---
