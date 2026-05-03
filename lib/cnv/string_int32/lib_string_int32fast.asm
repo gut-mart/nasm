@@ -1,7 +1,12 @@
 ; ==============================================================================
 ; LIBRERÍA: lib_string_int32fast.asm
 ; DESCRIPCIÓN: Capa 2 (Motor Rápido). Convierte String a Int32 según su prefijo.
-; CORRECCIÓN: Añadido soporte para números negativos (signo '-' inicial).
+; CONTRATO:
+;   Entrada: RDI = puntero a cadena ya validada (no comprueba caracteres).
+;   Salida:  EAX = valor convertido.
+;            CF = 0 siempre (esta capa asume entrada válida y nunca falla).
+; CORRECCIÓN: Añadido `clc` antes del ret para que la convención de Carry
+;             Flag (0 = éxito) sea consistente con lib_string_int32cval.
 ; ==============================================================================
 
 default rel
@@ -13,9 +18,7 @@ lib_string_int32fast:
     xor eax, eax        
     xor rcx, rcx        
 
-    ; --- CORRECCIÓN: Manejar signo negativo ---
-    ; Comprobamos si hay un '-' al inicio. Si lo hay, lo anotamos en R11
-    ; y avanzamos el puntero para procesar los dígitos normalmente.
+    ; --- Manejar signo negativo ---
     xor r11d, r11d      ; R11D = 0 (bandera: sin signo negativo)
     mov cl, byte [rdi]
     cmp cl, '-'
@@ -49,7 +52,6 @@ lib_string_int32fast:
     
     jmp .bucle_dec
 
-; --- FIX: Saltos en líneas separadas ---
 .prep_hex: 
     add rdi, 2
     jmp .bucle_hex
@@ -116,10 +118,11 @@ lib_string_int32fast:
     jmp .bucle_dec
 
 .fin:
-    ; --- CORRECCIÓN: Aplicar negación si se detectó el signo '-' ---
+    ; --- Aplicar negación si se detectó el signo '-' ---
     test r11d, r11d
     jz .retornar
-    neg eax             ; Negamos el resultado para obtener el valor negativo
+    neg eax             
 
 .retornar:
+    clc                 ; CF=0: éxito (esta capa nunca falla)
     ret

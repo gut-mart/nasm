@@ -1,9 +1,10 @@
 ; ==============================================================================
 ; RUTA: ./comandos/monitor/draw_pixel/draw_pixel.asm
-; CORRECCIÓN: Lectura de argc/argv unificada a través de RBP. La alineación
-;             de pila ahora ocurre ANTES de leer cualquier argumento, igual
-;             que en fb_core.asm y draw_rect.asm. Esto garantiza consistencia
-;             y elimina la mezcla de referencias entre RSP y RBP.
+; CORRECCIÓN: 
+;   - Tras cada llamada a lib_string_int32cval se comprueba el Carry Flag.
+;     Si CF=1, los argumentos no son números válidos y se reporta error.
+;   - Tras llamar a lib_draw_pixelcval se comprueba CF. Si CF=1, el pixel
+;     estaba fuera de los límites y se reporta error en lugar de un falso "OK".
 ; ==============================================================================
 
 %include "lib/constants.inc"
@@ -31,7 +32,6 @@ section .data
     msg_ayuda_2 db "Descripcion: Dibuja un pixel en el Framebuffer (Capa 1: con validacion).", 10, 10, 0
     msg_ayuda_3 db "Argumentos:", 10, 0
     
-    ; Textos fragmentados para inyectar números dinámicos
     msg_ayuda_4 db "  X       Coordenada horizontal (0 a ", 0
     msg_ayuda_5 db "  Y       Coordenada vertical   (0 a ", 0
     msg_cierre   db ").", 10, 0
@@ -50,19 +50,19 @@ section .data
     msg_ayuda_E db "  sudo ./bin/draw_pixel 960 540 0xFF0000      ; Rojo en el centro", 10, 0
     msg_ayuda_F db "  sudo ./bin/draw_pixel 0x10 0x10 0x00FF00    ; Verde en coords hex", 10, 0
 
-    msg_error_args db "Error: Numero de argumentos incorrecto o formato invalido. Usa '-h'.", 10, 0
-    msg_error_fb   db "Error: No se pudo inicializar /dev/fb0. ¿Ejecutaste con sudo?", 10, 0
-    msg_exito      db "Pixel dibujado correctamente (con validacion cval).", 10, 0
+    msg_error_args     db "Error: Numero de argumentos incorrecto o formato invalido. Usa '-h'.", 10, 0
+    msg_error_numero   db "Error: Argumento no es un numero valido.", 10, 0
+    msg_error_fb       db "Error: No se pudo inicializar /dev/fb0. ¿Ejecutaste con sudo?", 10, 0
+    msg_error_fuera    db "Error: Pixel fuera de los limites de la pantalla.", 10, 0
+    msg_exito          db "Pixel dibujado correctamente (con validacion cval).", 10, 0
 
 section .text
     global _start
 
 _start:
-    ; --- CORRECCIÓN: Primero establecemos el frame de pila, LUEGO leemos args ---
-    ; Así TODAS las lecturas de argv se hacen a través de RBP, que es estable
-    ; y no cambia con la alineación posterior de RSP.
-    mov rbp, rsp        ; RBP = RSP original (pila sin alinear, con argc y argv)
-    and rsp, -16        ; Alineamos RSP al ABI antes de cualquier CALL
+    ; --- Establecer frame de pila ANTES de leer args ---
+    mov rbp, rsp
+    and rsp, -16
 
     ; 1. Extraer argumentos (CLI) — TODOS a través de RBP
     mov rbx, [rbp]          ; argc
@@ -88,16 +88,21 @@ _start:
     jne .error_args
 
     ; --- 3. CONVERSIÓN CON VALIDACIÓN (CVAL) ---
+    ; Tras cada conversión comprobamos CF: si CF=1, la cadena no era
+    ; un número válido y abortamos con mensaje claro.
     mov rdi, r12
     call lib_string_int32cval
+    jc .error_numero
     mov dword [coord_x], eax
 
     mov rdi, r13
     call lib_string_int32cval
+    jc .error_numero
     mov dword [coord_y], eax
 
     mov rdi, r14
     call lib_string_int32cval
+    jc .error_numero
     mov dword [color], eax
 
     ; --- 4. INICIALIZAR FRAMEBUFFER ---
@@ -113,9 +118,9 @@ _start:
 
     ; --- 4.5 TRADUCCIÓN AL HARDWARE NATIVO ---
     mov rdi, datos_fb
-    mov esi, dword [color]      ; Le pasamos el color estándar del usuario
-    call lib_color_pack         ; EAX devuelve el color perfecto para tu PC
-    mov dword [color], eax      ; Actualizamos la variable con el color nativo
+    mov esi, dword [color]      
+    call lib_color_pack         
+    mov dword [color], eax      
 
     ; --- 5. DIBUJAR PÍXEL (CAPA SEGURA) ---
     mov rdi, datos_fb
@@ -123,6 +128,7 @@ _start:
     mov edx, dword [coord_y]
     mov ecx, dword [color]
     call lib_draw_pixelcval         
+    jc .error_fuera                 ; CF=1: pixel fuera de pantalla
 
     ; --- 6. ÉXITO Y SALIDA ---
     mov rdi, msg_exito
@@ -134,7 +140,7 @@ _start:
     ; Intentamos obtener los datos de la pantalla dinámicamente
     mov rdi, datos_fb
     call fb_core
-    mov r15, rax            ; Guardamos el resultado de fb_core (0 = OK, negativo = Error)
+    mov r15, rax            
 
     mov rdi, msg_ayuda_1
     call print_string
@@ -149,7 +155,7 @@ _start:
     cmp r15, 0
     jl .sin_sudo_x
     mov edi, dword [datos_fb + ScreenInfo.width]
-    dec edi                 ; Límite máximo es Ancho - 1
+    dec edi                 
     call print_int
     mov rdi, msg_cierre
     call print_string
@@ -165,7 +171,7 @@ _start:
     cmp r15, 0
     jl .sin_sudo_y
     mov edi, dword [datos_fb + ScreenInfo.height]
-    dec edi                 ; Límite máximo es Alto - 1
+    dec edi                 
     call print_int
     mov rdi, msg_cierre
     call print_string
@@ -202,7 +208,17 @@ _start:
     call print_string
     sys_exit 1
 
+.error_numero:
+    mov rdi, msg_error_numero
+    call print_string
+    sys_exit 1
+
 .error_fb:
     mov rdi, msg_error_fb
+    call print_string
+    sys_exit 1
+
+.error_fuera:
+    mov rdi, msg_error_fuera
     call print_string
     sys_exit 1

@@ -1,7 +1,15 @@
 ; ==============================================================================
 ; LIBRERÍA: lib_string_int32cval.asm
 ; DESCRIPCIÓN: Capa 1 (Escudo). Identifica prefijos y valida caracteres.
-; CORRECCIÓN: Añadido soporte para números negativos (signo '-' inicial).
+; CONTRATO:
+;   Entrada: RDI = puntero a cadena terminada en NUL.
+;   Salida:  EAX = valor convertido (válido solo si CF=0).
+;            CF = 0 si la conversión es válida.
+;            CF = 1 si la cadena no representa un número válido.
+; CORRECCIÓN: Antes devolvía EAX=0 silenciosamente al detectar error, lo que
+;             era ambiguo con el valor "0" legítimo. Ahora se usa Carry Flag
+;             como bandera de error fuera de banda. Esto permite al llamante
+;             distinguir "0 válido" de "error → 0".
 ; ==============================================================================
 
 default rel
@@ -22,10 +30,7 @@ lib_string_int32cval:
     test cl, cl
     jz .error           
 
-    ; --- CORRECCIÓN: Manejar signo negativo ---
-    ; Si el primer carácter es '-', lo saltamos para validar los dígitos,
-    ; pero mantenemos RBX apuntando al '-' para pasar la cadena completa
-    ; (con signo) a lib_string_int32fast al final.
+    ; --- Manejar signo negativo ---
     cmp cl, '-'
     jne .detectar_prefijo
     inc rdi             ; Saltamos el '-'
@@ -57,7 +62,6 @@ lib_string_int32cval:
     je .prep_dec
     jmp .val_dec
 
-; --- FIX: Saltos en líneas separadas ---
 .prep_hex: 
     add rdi, 2
     jmp .val_hex
@@ -75,7 +79,7 @@ lib_string_int32cval:
 .val_hex:
     mov cl, byte [rdi]
     test cl, cl
-    jz .exito
+    jz .verificar_no_vacio_tras_prefijo
     cmp cl, '0'
     jl .error
     cmp cl, '9'
@@ -96,7 +100,7 @@ lib_string_int32cval:
 .val_bin:
     mov cl, byte [rdi]
     test cl, cl
-    jz .exito
+    jz .verificar_no_vacio_tras_prefijo
     cmp cl, '0'
     jl .error
     cmp cl, '1'
@@ -108,7 +112,7 @@ lib_string_int32cval:
 .val_oct:
     mov cl, byte [rdi]
     test cl, cl
-    jz .exito
+    jz .verificar_no_vacio_tras_prefijo
     cmp cl, '0'
     jl .error
     cmp cl, '7'
@@ -128,17 +132,34 @@ lib_string_int32cval:
     inc rdi
     jmp .val_dec
 
+    ; Verifica que tras el prefijo (0x, 0b, 0o, 0d) hubo al menos un dígito.
+    ; Si la cadena era solo "0x" o "0b" la consideramos inválida.
+.verificar_no_vacio_tras_prefijo:
+    ; RBX apunta al inicio (tras posible '-'), RDI al final.
+    ; Si avanzamos solo 2 caracteres (el prefijo), no había dígitos.
+    ; Por simplicidad: si la cadena original era exactamente "0x", "0X",
+    ; "0b", etc., el segundo carácter ya nos dijo que había prefijo, así
+    ; que aquí basta con saber que tras el prefijo NO hubo dígitos.
+    ; Comprobación pragmática: comparamos si RDI apunta justo tras el
+    ; prefijo (offset 2 desde RBX, o 3 si había '-').
+    mov rax, rdi
+    sub rax, rbx
+    cmp rax, 3              ; Caso "0xN" o "-0x" → mínimo válido es 3 sin '-' o 4 con '-'
+    jl .error
+    jmp .exito
+
     ; --- DELEGACIÓN ---
 .exito:
-    ; Pasamos RBX (el puntero ORIGINAL, incluyendo el '-' si lo había)
-    ; a lib_string_int32fast para que gestione la conversión completa.
     mov rdi, rbx        
     pop rbx             
     leave               
+    ; Tail-call a fast: fast siempre tiene éxito (no valida) y dejará
+    ; CF=0 al retornar (clc se hace allí).
     jmp lib_string_int32fast 
 
 .error:
     xor eax, eax        
     pop rbx
     leave
+    stc                 ; CF=1: indicar error al llamante
     ret

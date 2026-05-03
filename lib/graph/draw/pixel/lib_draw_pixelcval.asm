@@ -1,13 +1,19 @@
 ; ==============================================================================
 ; LIBRERÍA: lib_draw_pixelcval.asm
 ; DESCRIPCIÓN: Capa 1 (Escudo). Valida coordenadas y delega en la versión rápida.
+; CONTRATO:
+;   Entrada: RDI (ScreenInfo), ESI (X), EDX (Y), ECX (Color)
+;   Salida:  CF = 0 si el pixel está dentro de la pantalla y se ha dibujado.
+;            CF = 1 si está fuera de los límites; no se ha dibujado nada.
+; CORRECCIÓN: Antes hacía un ret silencioso al detectar fuera de límites,
+;             sin comunicar el clipping al llamante. Ahora se usa Carry Flag
+;             para que el comando principal pueda informar al usuario.
 ; ==============================================================================
 
 %include "lib/graph/core/lib_fb_core.inc"
 
 default rel
 
-; Importamos la versión rápida (Capa 2) para delegar el trabajo
 extern lib_draw_pixelfast
 
 section .text
@@ -15,7 +21,6 @@ section .text
 
 ; ------------------------------------------------------------------------------
 ; FUNCIÓN: lib_draw_pixelcval
-; ENTRADA: RDI (ScreenInfo), ESI (X), EDX (Y), ECX (Color)
 ; ------------------------------------------------------------------------------
 lib_draw_pixelcval:
     ; --- BARRERA DE VALIDACIÓN (CLIPPING BÁSICO) ---
@@ -32,10 +37,11 @@ lib_draw_pixelcval:
     jge .fuera_de_limites                   ; Si Y >= Alto de pantalla, abortar
 
     ; --- DELEGACIÓN (TAIL CALL) ---
-    ; Los datos han superado la validación de la capa 1. 
-    ; Saltamos (jmp) a la rutina de la capa 2. 
-    ; El 'ret' de lib_draw_pixelfast devolverá el control al comando principal.
+    ; Limpiamos CF=0 antes del tail-call. lib_draw_pixelfast no toca CF
+    ; de forma intencional, así que su `ret` preserva CF=0 hacia el llamante.
+    clc
     jmp lib_draw_pixelfast
 
 .fuera_de_limites:
+    stc                                     ; CF=1: pixel fuera, no dibujado
     ret

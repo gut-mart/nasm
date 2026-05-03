@@ -2,6 +2,12 @@
 ; LIBRERÍA: lib_draw_rectcval.asm
 ; DESCRIPCIÓN: Capa 1 (Escudo). Realiza Clipping inteligente del rectángulo.
 ;              Recorta W y H si la figura se sale parcialmente de los límites.
+; CONTRATO:
+;   Entrada: RDI (ScreenInfo), ESI (X), EDX (Y), ECX (W), R8D (H), R9D (Color)
+;   Salida:  CF = 0 si se ha dibujado algo (totalmente dentro o clipping parcial).
+;            CF = 1 si el rectángulo está totalmente fuera; nada dibujado.
+; NOTA: Clipping parcial NO es un error — es el uso normal del clipping.
+;       Solo se reporta error cuando el rectángulo entero queda fuera.
 ; ==============================================================================
 
 %include "lib/graph/core/lib_fb_core.inc"
@@ -13,8 +19,6 @@ extern lib_draw_rectfast
 section .text
     global lib_draw_rectcval
 
-; ------------------------------------------------------------------------------
-; ABI: RDI (ScreenInfo), ESI (X), EDX (Y), ECX (W), R8D (H), R9D (Color)
 ; ------------------------------------------------------------------------------
 lib_draw_rectcval:
     ; --- 1. CLIPPING EJE X ---
@@ -52,7 +56,10 @@ lib_draw_rectcval:
 
     ; --- 3. DELEGACIÓN ---
 .dibujar:
-    jmp lib_draw_rectfast       ; Tail call a la Capa 2 con los datos perfectos
+    ; Limpiamos CF=0. lib_draw_rectfast no toca CF intencionadamente.
+    clc
+    jmp lib_draw_rectfast
 
 .abortar:
+    stc                         ; CF=1: rectángulo totalmente fuera
     ret

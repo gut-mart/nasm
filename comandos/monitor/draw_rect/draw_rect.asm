@@ -1,8 +1,11 @@
 ; ==============================================================================
 ; RUTA: ./comandos/monitor/draw_rect/draw_rect.asm
-; CORRECCIÓN: Lectura de argv unificada. Todos los argumentos se leen a través
-;             de RBP (establecido ANTES de leerlos), eliminando la mezcla
-;             peligrosa entre referencias a RSP y RBP.
+; CORRECCIÓN: 
+;   - Tras cada llamada a lib_string_int32cval se comprueba el Carry Flag.
+;     Si CF=1, los argumentos no son números válidos y se reporta error.
+;   - Tras llamar a lib_draw_rectcval se comprueba CF. Si CF=1, el rectángulo
+;     estaba totalmente fuera de pantalla y se reporta error en lugar de un
+;     falso "OK". (Clipping parcial sigue siendo CF=0, uso normal.)
 ; ==============================================================================
 
 %include "lib/constants.inc"
@@ -35,7 +38,6 @@ section .data
     msg_ayuda_x db "  X       Coordenada horizontal origen (Acepta negativos).", 10, 0
     msg_ayuda_y db "  Y       Coordenada vertical origen   (Acepta negativos).", 10, 0
     
-    ; Textos fragmentados para inyectar números dinámicos
     msg_ayuda_w db "  W       Ancho del rectangulo (Max visible: ", 0
     msg_ayuda_h db "  H       Alto del rectangulo  (Max visible: ", 0
     msg_cierre   db ").", 10, 0
@@ -48,19 +50,19 @@ section .data
     msg_ayuda_e1 db "  sudo ./bin/draw_rect 0 0 1920 1080 0xFF0000   ; Limpiar pantalla en rojo", 10, 0
     msg_ayuda_e2 db "  sudo ./bin/draw_rect -50 -50 200 200 0x00FF00 ; Cuadrado recortado en la esquina", 10, 0
 
-    msg_error_args db "Error: Numero de argumentos incorrecto. Usa '-h' para ayuda.", 10, 0
-    msg_error_fb   db "Error: No se pudo inicializar /dev/fb0. ¿Ejecutaste con sudo (o tienes permisos)?", 10, 0
-    msg_exito      db "Rectangulo procesado correctamente.", 10, 0
+    msg_error_args     db "Error: Numero de argumentos incorrecto. Usa '-h' para ayuda.", 10, 0
+    msg_error_numero   db "Error: Argumento no es un numero valido.", 10, 0
+    msg_error_fb       db "Error: No se pudo inicializar /dev/fb0. ¿Ejecutaste con sudo (o tienes permisos)?", 10, 0
+    msg_error_fuera    db "Error: Rectangulo totalmente fuera de los limites de la pantalla.", 10, 0
+    msg_exito          db "Rectangulo procesado correctamente.", 10, 0
 
 section .text
     global _start
 
 _start:
-    ; --- CORRECCIÓN: Primero establecemos el frame de pila, LUEGO leemos args ---
-    ; De este modo TODAS las lecturas de argv se hacen a través de RBP,
-    ; que es estable y no cambia con la alineación posterior de RSP.
-    mov rbp, rsp        ; Guardamos RSP original en RBP
-    and rsp, -16        ; Alineamos la pila al ABI antes de cualquier CALL
+    ; --- Establecer frame de pila ANTES de leer args ---
+    mov rbp, rsp
+    and rsp, -16
 
     ; 1. Extraer argumentos (CLI) — TODOS a través de RBP
     mov rbx, [rbp]          ; argc
@@ -84,25 +86,31 @@ _start:
     jne .error_args
 
     ; --- 3. CONVERSIÓN CON VALIDACIÓN (CVAL) ---
-    ; CORRECCIÓN: Todos los argv leídos uniformemente desde RBP
+    ; Tras cada conversión comprobamos CF: si CF=1, la cadena no era
+    ; un número válido y abortamos con mensaje claro.
     mov rdi, r12                ; argv[1] = X
     call lib_string_int32cval
+    jc .error_numero
     mov dword [coord_x], eax
 
     mov rdi, [rbp + 24]         ; argv[2] = Y
     call lib_string_int32cval
+    jc .error_numero
     mov dword [coord_y], eax
 
     mov rdi, [rbp + 32]         ; argv[3] = W
     call lib_string_int32cval
+    jc .error_numero
     mov dword [width], eax
 
     mov rdi, [rbp + 40]         ; argv[4] = H
     call lib_string_int32cval
+    jc .error_numero
     mov dword [height], eax
 
     mov rdi, [rbp + 48]         ; argv[5] = Color
     call lib_string_int32cval
+    jc .error_numero
     mov dword [color], eax
 
     ; --- 4. INICIALIZAR FRAMEBUFFER ---
@@ -130,6 +138,7 @@ _start:
     mov r8d, dword [height]
     mov r9d, dword [color]
     call lib_draw_rectcval         
+    jc .error_fuera                 ; CF=1: rectángulo totalmente fuera
 
     ; --- 6. ÉXITO Y SALIDA ---
     mov rdi, msg_exito
@@ -141,7 +150,7 @@ _start:
     ; Intentamos obtener los datos de la pantalla dinámicamente
     mov rdi, datos_fb
     call fb_core
-    mov r15, rax            ; Guardamos el resultado de fb_core
+    mov r15, rax            
 
     mov rdi, msg_ayuda_1
     call print_string
@@ -201,7 +210,17 @@ _start:
     call print_string
     sys_exit 1
 
+.error_numero:
+    mov rdi, msg_error_numero
+    call print_string
+    sys_exit 1
+
 .error_fb:
     mov rdi, msg_error_fb
+    call print_string
+    sys_exit 1
+
+.error_fuera:
+    mov rdi, msg_error_fuera
     call print_string
     sys_exit 1
