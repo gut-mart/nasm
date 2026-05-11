@@ -133,18 +133,19 @@ lib_string_int32cval:
     jmp .val_dec
 
     ; Verifica que tras el prefijo (0x, 0b, 0o, 0d) hubo al menos un dígito.
-    ; Si la cadena era solo "0x" o "0b" la consideramos inválida.
+    ; Si la cadena era solo "0x", "0b", etc., la consideramos inválida.
 .verificar_no_vacio_tras_prefijo:
-    ; RBX apunta al inicio (tras posible '-'), RDI al final.
-    ; Si avanzamos solo 2 caracteres (el prefijo), no había dígitos.
-    ; Por simplicidad: si la cadena original era exactamente "0x", "0X",
-    ; "0b", etc., el segundo carácter ya nos dijo que había prefijo, así
-    ; que aquí basta con saber que tras el prefijo NO hubo dígitos.
-    ; Comprobación pragmática: comparamos si RDI apunta justo tras el
-    ; prefijo (offset 2 desde RBX, o 3 si había '-').
+    ; RBX apunta al inicio de la cadena, RDI al carácter tras el último dígito.
+    ; Mínimo válido: 3 sin '-' (ej: "0xF"), 4 con '-' (ej: "-0xF").
     mov rax, rdi
     sub rax, rbx
-    cmp rax, 3              ; Caso "0xN" o "-0x" → mínimo válido es 3 sin '-' o 4 con '-'
+    cmp byte [rbx], '-'
+    jne .comprobar_sin_signo
+    cmp rax, 4
+    jl .error
+    jmp .exito
+.comprobar_sin_signo:
+    cmp rax, 3
     jl .error
     jmp .exito
 
