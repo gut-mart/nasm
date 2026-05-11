@@ -10,6 +10,10 @@ falta, por qué se aplazó y qué haría falta para abordarla.
 
 ### Soporte de profundidad de color variable (bpp ≠ 32)
 
+**Estado:** parcialmente resuelto. El offset X y el salto de fila leen
+`ScreenInfo.bpp` dinámicamente. La escritura final (`mov dword`) sigue
+asumiendo 32 bpp (misma limitación que `lib_draw_pixelfast`).
+
 **Estado:** pendiente.
 
 **Descripción:**
