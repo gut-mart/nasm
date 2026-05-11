@@ -1,5 +1,7 @@
 # Entorno NASM para Linux
 
+![CI](https://github.com/gut-mart/nasm/actions/workflows/ci.yml/badge.svg)
+
 Proyecto personal de aprendizaje y experimentación con ensamblador x86_64 en
 Linux. La idea es crear pequeñas librerías reutilizables escritas íntegramente
 en NASM, sin depender de libc ni de ninguna otra librería externa, y dibujar
