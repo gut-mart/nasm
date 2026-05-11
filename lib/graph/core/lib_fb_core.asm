@@ -72,6 +72,8 @@ fb_core:
     mov rdx, fb_var_info
     mov rax, SYS_IOCTL
     syscall
+    cmp rax, 0
+    jl .error_ioctl
 
     ; 2. Info Fija
     mov rdi, rbx
@@ -79,6 +81,8 @@ fb_core:
     mov rdx, fb_fix_info
     mov rax, SYS_IOCTL
     syscall
+    cmp rax, 0
+    jl .error_ioctl
 
     ; 3. Mapeo a estructura ScreenInfo
     mov eax, dword [fb_var_info + 0]
@@ -108,6 +112,8 @@ fb_core:
     mov rax, 0
     jmp .fin
 
+.error_ioctl:
+    sys_close rbx
 .error:
     mov rax, -1
 .fin:

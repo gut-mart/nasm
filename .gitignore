@@ -48,7 +48,7 @@ comandos/**/Makefile
 
 # --- Depuración ---
 .gdbhistory
-core
+/core
 vgcore.*
 
 # --- Tests y resultados ---
