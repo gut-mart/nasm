@@ -143,7 +143,6 @@ _start:
     ; --- 6. ÉXITO Y SALIDA ---
     mov rdi, msg_exito
     call print_string
-    call print_nl
     sys_exit 0
 
 .modo_ayuda:
