@@ -10,10 +10,6 @@ falta, por qué se aplazó y qué haría falta para abordarla.
 
 ### Soporte de profundidad de color variable (bpp ≠ 32)
 
-**Estado:** parcialmente resuelto. El offset X y el salto de fila leen
-`ScreenInfo.bpp` dinámicamente. La escritura final (`mov dword`) sigue
-asumiendo 32 bpp (misma limitación que `lib_draw_pixelfast`).
-
 **Estado:** pendiente.
 
 **Descripción:**
@@ -61,107 +57,14 @@ Las cabeceras de ambos archivos ya documentan esta limitación.
 
 ---
 
-### `fb_core` no comprueba el código de retorno de los `ioctl`
-
-**Estado:** pendiente.
-
-**Descripción:**
-La función `fb_core` (`lib/graph/core/lib_fb_core.asm`) llama dos veces a
-`ioctl` para obtener la información del framebuffer (`FBIOGET_VSCREENINFO` y
-`FBIOGET_FSCREENINFO`), pero no comprueba el valor de retorno tras los
-`syscall`. Si alguno de los `ioctl` falla (permisos insuficientes, dispositivo
-no disponible, kernel sin soporte de la operación), `fb_core` continúa como
-si hubiera ido bien y rellena la estructura `ScreenInfo` con datos basura.
-
-**Impacto actual:**
-En la práctica casi nunca se manifiesta porque si `sys_open` sobre `/dev/fb0`
-tiene éxito, los `ioctl` también suelen tenerlo. Pero en escenarios poco
-comunes (kernel personalizado sin soporte de framebuffer, dispositivo
-sustituido en caliente, etc.) el comando reportaría datos basura y los
-comandos posteriores dibujarían en posiciones incorrectas o tocarían memoria
-no mapeada.
-
-**Por qué se pospone:**
-No es bloqueante para el caso de uso principal (hardware de pruebas con
-`/dev/fb0` estándar) y la solución requiere reordenar parte del flujo de
-`fb_core` para tener un punto de salida común con cleanup del file descriptor.
-
-**Qué haría falta para abordarlo:**
-
-1. Tras cada `syscall` de `ioctl`, comprobar si `RAX < 0` y saltar a un
-   handler de error si lo es.
-2. El handler debe cerrar el file descriptor abierto antes de retornar
-   (con `sys_close` sobre el FD guardado en `RBX`).
-3. La función debe devolver un código de error claro en `EAX` (negativo)
-   para que el llamante lo propague.
-4. Los comandos `draw_pixel`, `draw_rect`, etc. ya comprueban `cmp rax, 0
-   / jl .error_fb`, así que con que `fb_core` devuelva valor negativo
-   bastará para que el flujo de error funcione.
-
-**Ubicación afectada:**
-
-- `lib/graph/core/lib_fb_core.asm`
-
----
-
-## Mejoras de robustez
-
-### Validación de overflow en `lib_string_int32fast`
-
-**Estado:** pendiente.
-
-**Descripción:**
-La conversión de cadena a entero no detecta desbordamiento. Una entrada como
-`"99999999999999"` se convierte silenciosamente a un valor truncado de 32 bits
-sin avisar al llamante.
-
-**Por qué se pospone:**
-Para uso casual desde CLI, el problema es menor (las coordenadas y colores
-típicos caben holgadamente en 32 bits). No bloquea ningún caso de uso real.
-
-**Qué haría falta:**
-Tras cada multiplicación/desplazamiento en los bucles de conversión, comprobar
-si el resultado se ha reducido respecto al valor previo. Si lo ha hecho, marcar
-overflow y devolver error vía Carry Flag (la API ya soporta CF=1 = error
-desde el commit 198d6d0).
-
-**Ubicación afectada:**
-
-- `lib/cnv/string_int32/lib_string_int32fast.asm`
-
----
-
-## Mejoras cosméticas
-
-### Doble salto de línea al final de mensajes de éxito
-
-**Estado:** pendiente.
-
-**Descripción:**
-Los comandos `draw_pixel` y `draw_rect` imprimen un salto de línea extra tras
-el mensaje de éxito porque hacen `print_string` (con el `\n` ya incluido en el
-literal) seguido de `print_nl`. Resultado: un renglón en blanco entre el
-mensaje y el prompt.
-
-**Por qué se pospone:**
-Es puramente cosmético. No afecta a tests ni a comportamiento. Se arregla
-cuando se haga el siguiente pase de pulido sobre los comandos.
-
-**Qué haría falta:**
-Quitar la llamada a `print_nl` después del `print_string` del mensaje de
-éxito en ambos comandos.
-
-**Ubicación afectada:**
-
-- `comandos/monitor/draw_pixel/draw_pixel.asm`
-- `comandos/monitor/draw_rect/draw_rect.asm`
-
----
-
 ## Funcionalidad futura
 
-(Sin items todavía. Añadir aquí nuevos comandos a desarrollar:
-`draw_line`, `draw_circle`, `draw_text`, etc.)
+Nuevos comandos y librerías a desarrollar, por orden de prioridad natural:
+
+- `draw_line` — algoritmo de Bresenham, siguiente paso lógico tras rect.
+- `draw_circle` — siguiente en complejidad geométrica.
+- `draw_text` — requiere librería de fuentes, más trabajo.
+- Librerías matemáticas, gestión de memoria, estructuras de datos.
 
 ---
 
@@ -172,3 +75,63 @@ Quitar la llamada a `print_nl` después del `print_string` del mensaje de
   pospuestas tiene valor.
 - Cada item nuevo debe explicar: qué es, por qué se pospone, y qué haría falta
   para abordarlo. Sin esos tres campos, el item no es accionable a futuro.
+
+---
+
+## Resuelto
+
+### `fb_core` no comprueba el código de retorno de los `ioctl`
+
+**Resuelto:** 2026-05-12
+
+**Descripción:**
+`fb_core` llamaba dos veces a `ioctl` sin comprobar el valor de retorno.
+Si alguno fallaba, la función continuaba rellenando `ScreenInfo` con datos
+basura sin avisar al llamante.
+
+**Solución aplicada:**
+Tras cada `syscall` de `ioctl` se comprueba `cmp rax, 0 / jl .error_ioctl`.
+El handler `.error_ioctl` cierra el file descriptor con `sys_close rbx` antes
+de saltar a `.error`, que devuelve `rax = -1`. Los llamantes ya comprobaban
+ese valor negativo, por lo que no requirieron cambios.
+
+**Ubicación:** `lib/graph/core/lib_fb_core.asm`
+
+---
+
+### Validación de overflow en `lib_string_int32cval`
+
+**Resuelto:** 2026-05-12
+
+**Descripción:**
+La conversión de cadena a entero no detectaba desbordamiento. Una entrada como
+`"99999999999999"` se convertía silenciosamente a un valor truncado de 32 bits
+con CF=0, como si fuera válida.
+
+**Solución aplicada:**
+Añadido conteo de dígitos en `lib_string_int32cval` tras la validación de
+caracteres. Si el número de dígitos supera el máximo posible para la base,
+se devuelve CF=1 antes de llamar a `lib_string_int32fast`. Límites aplicados:
+decimal=10, hexadecimal=8, octal=11, binario=32. Se añadieron los registros
+callee-saved R12 (puntero al primer dígito) y R13 (límite de la base).
+
+**Ubicación:** `lib/cnv/string_int32/lib_string_int32cval.asm`
+
+---
+
+### Doble salto de línea al final de mensajes de éxito
+
+**Resuelto:** 2026-05-12
+
+**Descripción:**
+`draw_pixel` y `draw_rect` imprimían un salto de línea extra tras el mensaje
+de éxito porque combinaban `print_string` (con `\n` en el literal) y
+`print_nl`.
+
+**Solución aplicada:**
+Eliminada la llamada a `print_nl` tras el `print_string` del mensaje de éxito
+en ambos comandos.
+
+**Ubicación:**
+- `comandos/monitor/draw_pixel/draw_pixel.asm`
+- `comandos/monitor/draw_rect/draw_rect.asm`
