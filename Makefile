@@ -102,15 +102,15 @@ deploy: $(EXEC)
 	@echo "--- 🚀 DESPLEGANDO EN $(PC_DESTINO) ---"
 	@scp $(EXEC) $(PC_DESTINO):$(REMOTE_DIR)/$(BASENAME)
 	@echo "✅ Binario [$(BASENAME)] enviado correctamente."
-	@scp scripts/fb_run $(PC_DESTINO):$(REMOTE_DIR)/fb_run
-	@ssh $(PC_DESTINO) "chmod +x $(REMOTE_DIR)/fb_run"
-	@echo "✅ Wrapper [fb_run] enviado correctamente."
+	@scp scripts/fb_run/fb_run.sh $(PC_DESTINO):$(REMOTE_DIR)/fb_run.sh
+	@ssh $(PC_DESTINO) "chmod +x $(REMOTE_DIR)/fb_run.sh"
+	@echo "✅ Wrapper [fb_run.sh] enviado correctamente."
 	@echo "🧹 Limpiando sesiones de gdbserver previas..."
 	@ssh $(PC_DESTINO) "sudo killall -9 gdbserver 2>/dev/null || true"
 	@echo "🛰️  Iniciando gdbserver remoto en puerto $(GDBSERVER_PORT)..."
 	@ssh $(PC_DESTINO) "nohup gdbserver 0.0.0.0:$(GDBSERVER_PORT) $(REMOTE_DIR)/$(BASENAME) $(ARGS) > /dev/null 2>&1 &"
 	@echo "🎯 Equipo remoto en espera. Pulsa F5 en VS Code para comenzar."
-	@echo "   Para ejecutar sin depurador: sudo $(REMOTE_DIR)/fb_run $(REMOTE_DIR)/$(BASENAME)"
+	@echo "   Para ejecutar sin depurador: sudo $(REMOTE_DIR)/fb_run.sh $(REMOTE_DIR)/$(BASENAME)"
 
 # Información sobre la configuración actual
 info:

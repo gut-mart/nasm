@@ -61,8 +61,7 @@ Las cabeceras de ambos archivos ya documentan esta limitación.
 
 Nuevos comandos y librerías a desarrollar, por orden de prioridad natural:
 
-- `draw_line` — algoritmo de Bresenham, siguiente paso lógico tras rect.
-- `draw_circle` — siguiente en complejidad geométrica.
+- `draw_circle` — siguiente en complejidad geométrica tras `draw_line`.
 - `draw_text` — requiere librería de fuentes, más trabajo.
 - Librerías matemáticas, gestión de memoria, estructuras de datos.
 
@@ -135,3 +134,74 @@ en ambos comandos.
 **Ubicación:**
 - `comandos/monitor/draw_pixel/draw_pixel.asm`
 - `comandos/monitor/draw_rect/draw_rect.asm`
+
+---
+
+### Comando `draw_line` con Bresenham y clipping Cohen-Sutherland
+
+**Resuelto:** 2026-05-12
+
+**Descripción:**
+Necesidad de dibujar líneas rectas entre dos puntos arbitrarios, incluyendo
+líneas que empiezan o terminan fuera de los límites de la pantalla.
+
+**Solución aplicada:**
+Dos capas siguiendo el patrón del proyecto. `lib_draw_linecval` implementa el
+algoritmo de Cohen-Sutherland para recortar la línea contra los bordes de la
+pantalla (CF=1 si totalmente fuera). `lib_draw_linefast` implementa Bresenham
+para rasterizar los 8 octantes usando solo sumas y comparaciones enteras.
+El comando `draw_line` sigue el ABI estándar del proyecto.
+
+**Ubicación:**
+- `lib/graph/draw/line/lib_draw_linecval.asm`
+- `lib/graph/draw/line/lib_draw_linefast.asm`
+- `comandos/monitor/draw_line/draw_line.asm`
+
+---
+
+### Comando `screenshot` y librería `lib_bmp_write`
+
+**Resuelto:** 2026-05-12
+
+**Descripción:**
+Necesidad de capturar el framebuffer a un archivo de imagen visualizable en
+cualquier ordenador, sin depender de herramientas externas como ffmpeg.
+
+**Solución aplicada:**
+`lib_bmp_write` construye una cabecera BMP de 54 bytes en tiempo de ejecución
+y convierte los píxeles de BGRA (formato nativo del framebuffer) a BGR (24 bpp)
+descartando el canal alfa. El resultado es un BMP estándar sin compresión que
+abre correctamente en cualquier visor. El comando `screenshot` acepta dos
+argumentos: nombre del archivo y ruta de destino, construyendo la ruta completa
+`RUTA/NOMBRE.bmp` internamente.
+
+**Ubicación:**
+- `lib/graph/bmp/lib_bmp_write.asm`
+- `comandos/monitor/screenshot/screenshot.asm`
+
+---
+
+### Control de cursor y espera de tecla (`lib_console` + `fb_run.sh`)
+
+**Resuelto:** 2026-05-12
+
+**Descripción:**
+Al ejecutar comandos gráficos desde la TTY del Tecra, el cursor del terminal
+parpadeaba encima del framebuffer, apareciendo en las capturas de pantalla.
+Además, comandos rápidos como `draw_line` terminaban antes de que el usuario
+pudiera ver el resultado.
+
+**Solución aplicada:**
+Dos piezas complementarias. `lib_console.asm` aporta tres funciones NASM:
+`lib_cursor_hide` y `lib_cursor_show` (secuencias ANSI ESC[?25l/h) y
+`lib_wait_key` (modo raw mínimo vía TCGETS/TCSETS, lee 1 byte sin eco ni Enter,
+restaura el terminal al salir). El wrapper de shell `scripts/fb_run/fb_run.sh`
+detecta el TTY activo vía `/sys/class/tty/tty0/active`, oculta el cursor en ese
+TTY, ejecuta el comando con `--espera` si se solicita, y restaura el cursor al
+terminar o si se interrumpe con Ctrl+C. `make deploy` copia `fb_run.sh` al
+Tecra automáticamente junto con el binario.
+
+**Ubicación:**
+- `lib/io/lib_console.asm`
+- `scripts/fb_run/fb_run.sh`
+- `Makefile` (target `deploy`)

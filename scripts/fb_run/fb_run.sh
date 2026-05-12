@@ -1,6 +1,6 @@
 #!/bin/bash
 # ==============================================================================
-# RUTA: ./scripts/fb_run
+# RUTA: ./scripts/fb_run/fb_run.sh
 # DESCRIPCIÓN: Oculta el cursor del terminal antes de ejecutar un comando de
 #              framebuffer y lo restaura al terminar, independientemente de si
 #              el comando tuvo éxito, falló o fue interrumpido.
@@ -9,15 +9,15 @@
 #              para funcionar correctamente tanto en local como vía SSH.
 #
 # USO:
-#   ./scripts/fb_run [--espera] <comando> [argumentos...]
+#   ./scripts/fb_run/fb_run.sh [--espera] <comando> [argumentos...]
 #
 #   --espera   Pausa tras el comando hasta que se pulse una tecla.
 #              Necesario para comandos de dibujo rápidos: sin esta opción
 #              el cursor se oculta y restaura antes de que el ojo lo detecte.
 #
 # EJEMPLOS:
-#   sudo ./scripts/fb_run --espera ./bin/draw_line 0 0 1919 1079 0xFFFFFF
-#   sudo ./scripts/fb_run --espera ./bin/screenshot captura /tmp
+#   sudo ./scripts/fb_run/fb_run.sh --espera ./bin/draw_line 0 0 1919 1079 0xFFFFFF
+#   sudo ./scripts/fb_run/fb_run.sh --espera ./bin/screenshot captura /tmp
 # ==============================================================================
 
 ESPERA=0
