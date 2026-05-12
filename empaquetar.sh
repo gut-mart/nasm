@@ -30,7 +30,7 @@ echo "------------------------------------------------"
 
 # 3. Patrón de extensiones y nombres relevantes para revisión.
 #    Si añades nuevas categorías, edítalas aquí.
-PATRON='\.(asm|inc|h|md|txt|json|mk|sh)$|/Makefile$|^Makefile$|^LICENSE$|^\.gitignore$|^\.env\.example$'
+PATRON='\.(asm|inc|h|[mM][dD]|txt|json|mk|sh|ya?ml)$|/Makefile$|^Makefile$|^LICENSE$|^\.gitignore$|^\.env\.example$|/fb_run$|^fb_run$'
 
 # 4. Listar SOLO archivos rastreados por git que coincidan con el patrón.
 #    'git ls-files' respeta .gitignore automáticamente, así que archivos
