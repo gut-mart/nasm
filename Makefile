@@ -1,7 +1,7 @@
 # ==============================================================================
 # RUTA: ./Makefile
 # DESCRIPCIÓN: Sistema de construcción para NASM con soporte opcional de
-#              despliegue y depuración remota vía SSH.
+#              despliegue, instalación y depuración remota vía SSH.
 #
 # USO BÁSICO:
 #   make SRC=comandos/monitor/draw_pixel/draw_pixel.asm
@@ -9,9 +9,11 @@
 #   make help
 #
 # USO REMOTO (requiere config.local.mk):
-#   make deploy SRC=comandos/monitor/draw_pixel/draw_pixel.asm
+#   make deploy  SRC=comandos/monitor/draw_pixel/draw_pixel.asm
+#   make install SRC=comandos/monitor/draw_pixel/draw_pixel.asm
 #
-# Para activar deploy, copia config.example.mk a config.local.mk y rellénalo.
+# Para activar deploy/install, copia config.example.mk a config.local.mk
+# y rellénalo con tus datos.
 # ==============================================================================
 
 SRC ?= main.asm
@@ -39,10 +41,14 @@ LIB_SRCS = $(shell find lib -name '*.asm')
 LIB_OBJS = $(patsubst %.asm, $(BUILD_DIR)/%.o, $(LIB_SRCS))
 LIB_DEPS = $(LIB_OBJS:.o=.d)
 
+# Directorio de instalación remoto (~/bin del usuario remoto)
+# Se puede sobreescribir en config.local.mk: INSTALL_DIR = /otra/ruta
+INSTALL_DIR ?= $(REMOTE_DIR)/bin
+
 # Flags de NASM: -g (debug), -F dwarf (formato para GDB y VS Code)
 NASMFLAGS = -f elf64 -g -F dwarf
 
-.PHONY: all clean clean-all test help run deploy info
+.PHONY: all clean clean-all test help run deploy install info
 
 all: $(EXEC)
 
@@ -112,6 +118,49 @@ deploy: $(EXEC)
 	@echo "🎯 Equipo remoto en espera. Pulsa F5 en VS Code para comenzar."
 	@echo "   Para ejecutar sin depurador: sudo $(REMOTE_DIR)/fb_run.sh $(REMOTE_DIR)/$(BASENAME)"
 
+# Instala el binario en ~/bin del equipo remoto para usarlo como comando del sistema.
+# Requiere config.local.mk con PC_DESTINO y REMOTE_DIR definidos.
+# Primera vez: ejecutar 'make install-setup' para preparar ~/bin en el Tecra.
+install: $(EXEC)
+	@if [ -z "$(PC_DESTINO)" ] || [ "$(PC_DESTINO)" = "mi_equipo_remoto" ]; then \
+		echo "❌ Error: PC_DESTINO no está configurado."; \
+		echo "   Copia config.example.mk a config.local.mk y rellena tus datos."; \
+		exit 1; \
+	fi
+	@echo "--- 📦 INSTALANDO EN $(PC_DESTINO):$(INSTALL_DIR) ---"
+	@ssh $(PC_DESTINO) "mkdir -p $(INSTALL_DIR)"
+	@scp $(EXEC) $(PC_DESTINO):$(INSTALL_DIR)/$(BASENAME)
+	@ssh $(PC_DESTINO) "chmod +x $(INSTALL_DIR)/$(BASENAME)"
+	@echo "✅ [$(BASENAME)] instalado en $(INSTALL_DIR)."
+	@scp scripts/fb_run/fb_run.sh $(PC_DESTINO):$(INSTALL_DIR)/fb_run.sh
+	@ssh $(PC_DESTINO) "chmod +x $(INSTALL_DIR)/fb_run.sh"
+	@echo "✅ [fb_run.sh] instalado en $(INSTALL_DIR)."
+	@echo ""
+	@echo "   Uso: fb_run.sh --espera $(BASENAME) [argumentos]"
+
+# Prepara ~/bin en el Tecra y lo añade al PATH si no está ya.
+# Solo necesario la primera vez.
+install-setup:
+	@if [ -z "$(PC_DESTINO)" ] || [ "$(PC_DESTINO)" = "mi_equipo_remoto" ]; then \
+		echo "❌ Error: PC_DESTINO no está configurado."; \
+		exit 1; \
+	fi
+	@echo "--- ⚙️  CONFIGURANDO ~/bin EN $(PC_DESTINO) ---"
+	@ssh $(PC_DESTINO) "mkdir -p $(INSTALL_DIR)"
+	@ssh $(PC_DESTINO) " \
+		SHELL_RC=~/.zshrc; \
+		[ ! -f \$$SHELL_RC ] && SHELL_RC=~/.bashrc; \
+		if ! grep -q '$(INSTALL_DIR)' \$$SHELL_RC 2>/dev/null; then \
+			echo '' >> \$$SHELL_RC; \
+			echo '# NASM commands' >> \$$SHELL_RC; \
+			echo 'export PATH=\"$(INSTALL_DIR):\$$PATH\"' >> \$$SHELL_RC; \
+			echo '✅ PATH actualizado en' \$$SHELL_RC; \
+		else \
+			echo 'ℹ️  PATH ya contiene $(INSTALL_DIR), sin cambios.'; \
+		fi"
+	@echo "✅ Setup completado. Reinicia la sesión en el Tecra o ejecuta:"
+	@echo "   source ~/.zshrc"
+
 # Información sobre la configuración actual
 info:
 	@echo "Configuración actual:"
@@ -121,6 +170,7 @@ info:
 	@if [ -n "$(PC_DESTINO)" ] && [ "$(PC_DESTINO)" != "mi_equipo_remoto" ]; then \
 		echo "  Destino SSH:      $(PC_DESTINO)"; \
 		echo "  Carpeta remota:   $(REMOTE_DIR)"; \
+		echo "  Dir instalación:  $(INSTALL_DIR)"; \
 		echo "  Puerto gdbserver: $(GDBSERVER_PORT)"; \
 	else \
 		echo "  Destino SSH:      (sin configurar - ver config.example.mk)"; \
@@ -130,16 +180,19 @@ info:
 help:
 	@echo "NASM Project - Comandos disponibles:"
 	@echo ""
-	@echo "  make SRC=<ruta.asm>      Compila un archivo específico"
-	@echo "  make clean               Limpia binario y objeto del comando actual"
-	@echo "  make clean-all           Limpia todo (incluida libcore.a)"
-	@echo "  make test                Ejecuta la suite de tests"
-	@echo "  make run                 Ejecuta el binario compilado localmente"
-	@echo "  make deploy SRC=<...>    Compila y despliega en equipo remoto (*)"
-	@echo "  make info                Muestra la configuración actual"
-	@echo "  make help                Muestra esta ayuda"
+	@echo "  make SRC=<ruta.asm>        Compila un archivo específico"
+	@echo "  make clean                 Limpia binario y objeto del comando actual"
+	@echo "  make clean-all             Limpia todo (incluida libcore.a)"
+	@echo "  make test                  Ejecuta la suite de tests"
+	@echo "  make run                   Ejecuta el binario compilado localmente"
+	@echo "  make deploy SRC=<...>      Compila y despliega en equipo remoto (*)"
+	@echo "  make install SRC=<...>     Instala en ~/bin del equipo remoto (*)"
+	@echo "  make install-setup         Prepara ~/bin y PATH (solo primera vez) (*)"
+	@echo "  make info                  Muestra la configuración actual"
+	@echo "  make help                  Muestra esta ayuda"
 	@echo ""
 	@echo "Ejemplo:"
 	@echo "  make SRC=comandos/monitor/draw_pixel/draw_pixel.asm"
+	@echo "  make install SRC=comandos/monitor/draw_line/draw_line.asm"
 	@echo ""
-	@echo "(*) deploy requiere config.local.mk - ver config.example.mk"
+	@echo "(*) requiere config.local.mk - ver config.example.mk"
