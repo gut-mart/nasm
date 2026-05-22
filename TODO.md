@@ -205,3 +205,31 @@ Tecra automáticamente junto con el binario.
 - `lib/io/lib_console.asm`
 - `scripts/fb_run/fb_run.sh`
 - `Makefile` (target `deploy`)
+
+---
+
+### Segfault en `lib_bmp_write` por lectura qword de slot dword
+
+**Resuelto:** 2026-05-22
+
+**Descripción:**
+`screenshot` terminaba con segfault y generaba un BMP de solo 54 bytes (solo
+la cabecera, sin píxeles). El bucle de conversión BGRA→BGR no ejecutaba
+ninguna iteración antes de petar.
+
+**Causa raíz:**
+`bytes_por_fila` se calculaba correctamente (3840 para 1280 píxeles) y se
+guardaba en el slot de pila como `dword`. Pero al leerlo posteriormente se
+usaba `mov r11, qword [rbp - 52]` — leyendo 8 bytes cuando solo se habían
+escrito 4. Los 4 bytes superiores contenían basura del stack, resultando en
+`r11 ≈ 4.192.428` en lugar de 0. El bucle de padding intentaba escribir
+4 millones de ceros fuera del buffer `row_buffer`, causando el segfault.
+Detectado con GDB: crash en `.pad_bucle`, `r11 = 0x3ff8ac`.
+
+**Solución aplicada:**
+Añadido `movzx rax, eax` antes de guardar en el slot de pila para
+zero-extend a 64 bits, garantizando que la lectura posterior como qword
+devuelve un valor limpio. El slot se amplió a 8 bytes (`qword`) de forma
+consistente.
+
+**Ubicación:** `lib/graph/bmp/lib_bmp_write.asm`
