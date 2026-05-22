@@ -2,21 +2,10 @@
 ; RUTA: ./lib/graph/bmp/lib_bmp_write.asm
 ; DESCRIPCIÓN: Escribe el contenido del framebuffer en un archivo BMP de 24 bits
 ;              sin compresión, compatible con cualquier visor de imágenes.
-; CONTRATO:
-;   Entrada: RDI = Puntero a ScreenInfo (con ptr_mem ya mapeado)
-;            RSI = Puntero a la ruta completa del archivo (string NUL)
-;   Salida:  RAX = 0 si éxito
-;            RAX = -1 si error al abrir/escribir el archivo
-; NOTAS:
-;   - Convierte BGRA (formato nativo del framebuffer) a BGR (24 bpp BMP).
-;     El canal alfa se descarta. El resultado abre correctamente en cualquier
-;     visor sin necesidad de reinterpretar canales.
-;   - El alto se escribe negativo en la cabecera para orden top-down.
-;   - Cada fila se rellena con ceros hasta múltiplo de 4 bytes (padding BMP).
-; CORRECCIÓN respecto a versión anterior (32 bpp):
-;   La versión anterior copiaba los 4 bytes BGRA directamente. El canal alfa=0
-;   era interpretado como transparencia total por PIL y otros visores,
-;   resultando en imagen negra. Con 24 bpp el canal alfa desaparece.
+; CORRECCIÓN v4: bytes_por_fila se guardaba como dword pero se leía como qword,
+;                los 4 bytes superiores contenían basura del stack causando un
+;                bucle de padding de ~4 millones de iteraciones y segfault.
+;                Corregido: se guarda y lee como qword consistentemente.
 ; ==============================================================================
 
 %include "lib/constants.inc"
@@ -32,7 +21,7 @@
 %define BMP_PLANES      1
 %define BMP_BPP         24
 %define BMP_COMPRESSION 0
-%define ROW_BUFFER_SIZE 5763    ; 1920*3 + 3 bytes padding máx
+%define ROW_BUFFER_SIZE 5763
 
 default rel
 
@@ -45,17 +34,15 @@ section .text
 
 ; ------------------------------------------------------------------------------
 ; MAPA DE REGISTROS:
-;   RBX = file descriptor
-;   R12 = ScreenInfo
-;   R13 = ruta archivo
+;   RBX  = puntero actual al framebuffer
+;   R12  = ScreenInfo
+;   R13  = ruta archivo
 ;   R14D = ancho (width)
 ;   R15D = alto (height)
-;   durante el bucle:
-;   R9  = puntero actual al framebuffer
+;   [rbp - 48] = file descriptor        (qword)
+;   [rbp - 56] = bytes por fila padding (qword) ← CORREGIDO: qword, no dword
 ;   R10D = fila actual
-;   R11D = píxeles restantes / contador padding
-;   EBX_low no usar — RBX es el FD
-;   ECX = bytes por fila con padding
+;   R11  = contador píxeles / padding
 ; ------------------------------------------------------------------------------
 lib_bmp_write:
     push rbp
@@ -65,6 +52,7 @@ lib_bmp_write:
     push r13
     push r14
     push r15
+    sub rsp, 16             ; [rbp-48]=FD, [rbp-56]=bytes_por_fila
 
     mov r12, rdi
     mov r13, rsi
@@ -77,9 +65,12 @@ lib_bmp_write:
     imul eax, 3
     add eax, 3
     and eax, 0xFFFFFFFC
-    mov ecx, eax                ; ECX = bytes por fila con padding
+    ; Guardar como QWORD para leer como qword después sin basura en bits altos
+    movzx rax, eax                  ; zero-extend a 64 bits
+    mov qword [rbp - 56], rax       ; guardar qword limpio
 
-    ; --- tamaño datos imagen: row_bytes * alto ---
+    ; --- tamaño datos imagen ---
+    mov eax, dword [rbp - 56]
     imul eax, r15d
     mov dword [bmp_header + 34], eax
 
@@ -113,10 +104,10 @@ lib_bmp_write:
     syscall
     cmp rax, 0
     jl .error
-    mov rbx, rax                ; RBX = FD
+    mov qword [rbp - 48], rax
 
     ; --- Escribir cabecera ---
-    mov rdi, rbx
+    mov rdi, qword [rbp - 48]
     mov rsi, bmp_header
     mov rdx, BMP_HEADER_SIZE
     mov rax, SYS_WRITE
@@ -124,39 +115,38 @@ lib_bmp_write:
     cmp rax, BMP_HEADER_SIZE
     jne .error_close
 
-    ; --- Bucle de filas ---
-    mov r9, qword [r12 + ScreenInfo.ptr_mem]
+    ; --- Inicializar puntero framebuffer en RBX ---
+    mov rbx, qword [r12 + ScreenInfo.ptr_mem]
     xor r10d, r10d
 
 .bucle_filas:
     cmp r10d, r15d
     jge .filas_fin
 
-    ; Convertir fila BGRA → BGR en row_buffer
     lea rdi, [row_buffer]
     mov r11d, r14d
 
 .bucle_pixeles:
     test r11d, r11d
     jz .pixeles_fin
-    mov al, byte [r9 + 0]       ; B
+    mov al, byte [rbx + 0]
     mov byte [rdi + 0], al
-    mov al, byte [r9 + 1]       ; G
+    mov al, byte [rbx + 1]
     mov byte [rdi + 1], al
-    mov al, byte [r9 + 2]       ; R
+    mov al, byte [rbx + 2]
     mov byte [rdi + 2], al
-    add r9, 4
+    add rbx, 4
     add rdi, 3
     dec r11d
     jmp .bucle_pixeles
 
 .pixeles_fin:
-    ; Padding hasta múltiplo de 4
+    ; calcular padding = bytes_por_fila - (ancho * 3)
     lea rsi, [row_buffer]
     mov rdx, rdi
-    sub rdx, rsi                ; rdx = ancho * 3
-    mov r11, rcx
-    sub r11, rdx                ; r11 = bytes de padding
+    sub rdx, rsi                    ; rdx = ancho * 3 (bytes escritos)
+    mov r11, qword [rbp - 56]       ; r11 = bytes_por_fila (qword limpio)
+    sub r11, rdx                    ; r11 = padding
     jz .sin_padding
 .pad_bucle:
     mov byte [rdi], 0
@@ -165,10 +155,10 @@ lib_bmp_write:
     jnz .pad_bucle
 .sin_padding:
 
-    ; Escribir fila
-    mov rdi, rbx
+    ; escribir fila
+    mov rdi, qword [rbp - 48]
     lea rsi, [row_buffer]
-    mov rdx, rcx                ; bytes por fila con padding
+    mov rdx, qword [rbp - 56]
     mov rax, SYS_WRITE
     syscall
     cmp rax, 0
@@ -178,15 +168,20 @@ lib_bmp_write:
     jmp .bucle_filas
 
 .filas_fin:
-    sys_close rbx
+    mov rdi, qword [rbp - 48]
+    mov rax, SYS_CLOSE
+    syscall
     mov rax, 0
     jmp .fin
 
 .error_close:
-    sys_close rbx
+    mov rdi, qword [rbp - 48]
+    mov rax, SYS_CLOSE
+    syscall
 .error:
     mov rax, -1
 .fin:
+    add rsp, 16
     pop r15
     pop r14
     pop r13
