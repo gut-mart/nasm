@@ -61,9 +61,14 @@ Las cabeceras de ambos archivos ya documentan esta limitación.
 
 Nuevos comandos y librerías a desarrollar, por orden de prioridad natural:
 
-- `draw_circle` — siguiente en complejidad geométrica tras `draw_line`.
-- `draw_text` — requiere librería de fuentes, más trabajo.
-- Librerías matemáticas, gestión de memoria, estructuras de datos.
+- `draw_text` — requiere librería de fuentes bitmap, más trabajo que el resto.
+- `lib/math/int32` — ampliar con división entera (floor_div, ceil_div) y punto
+  fijo cuando haya un caso de uso concreto (física, animación).
+- `lib/chrono` — ampliar `bench_rect` con más benchmarks: `bench_pixel`,
+  `bench_line`, `bench_circle`. Permitirá comparar el coste relativo de cada
+  primitiva y detectar regresiones tras optimizaciones.
+- Operaciones de color: brillo, fade, mezcla — primer usuario real de
+  `lib_math_clamp_i32` para limitar canales RGB a [0, 255].
 
 ---
 
@@ -233,3 +238,50 @@ devuelve un valor limpio. El slot se amplió a 8 bytes (`qword`) de forma
 consistente.
 
 **Ubicación:** `lib/graph/bmp/lib_bmp_write.asm`
+
+---
+
+### `lib/math/int32` — abs, min, max, clamp
+
+**Resuelto:** 2026-05-24
+
+**Descripción:**
+Necesidad de operaciones matemáticas básicas sobre enteros de 32 bits con
+signo como bloque de construcción para lógica de nivel alto (UI, animación,
+operaciones de color).
+
+**Solución aplicada:**
+`lib_math_int32.asm` implementa cuatro funciones leaf sin ramas condicionales,
+usando `cmovl`/`cmovg` para evitar mispredictions. `lib_math_clamp_i32` usa
+Carry Flag (CF=1) para señalizar rango inválido (lo > hi), siguiendo la
+convención del proyecto. Test unitario autónomo en
+`comandos/tests/math_int32/math_int32.asm`: 17/17 casos OK. Integrado en
+`tests/run_tests.sh` como nueva sección de tests unitarios de librerías.
+
+**Ubicación:**
+- `lib/math/int32/lib_math_int32.asm`
+- `lib/math/int32/lib_math_int32.inc`
+- `comandos/tests/math_int32/math_int32.asm`
+
+---
+
+### `lib/chrono` — medición de ciclos con RDTSC/RDTSCP y `bench_rect`
+
+**Resuelto:** 2026-05-24
+
+**Descripción:**
+Necesidad de medir el coste real en ciclos de CPU de las primitivas gráficas
+para tener una línea base antes de optimizar.
+
+**Solución aplicada:**
+`lib_rdtsc.asm` detecta en tiempo de inicialización via CPUID si el procesador
+soporta RDTSCP (más preciso, serializa el pipeline) o solo RDTSC, y usa el
+método disponible de forma transparente. Exporta `lib_rdtsc_init`,
+`lib_rdtsc_start`, `lib_rdtsc_stop` y `lib_rdtsc_method`. El comando
+`bench_rect` mide el coste de pintar un rectángulo de pantalla completa y
+reporta método, resolución y ticks. Medición real en Tecra M10
+(1280×800, RDTSC): **3.494.920 ticks** (~2.2ms a 1.6GHz).
+
+**Ubicación:**
+- `lib/chrono/lib_rdtsc.asm`
+- `comandos/chrono/bench_rect/bench_rect.asm`

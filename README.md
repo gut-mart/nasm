@@ -32,9 +32,13 @@ lib/             Librerías NASM reutilizables (se empaquetan en libcore.a)
   cnv/           Conversiones (string ↔ entero)
   graph/         Gráficos: framebuffer, color, dibujado
   io/            Entrada/salida básica
+  math/          Matemáticas enteras (abs, min, max, clamp)
+  chrono/        Medición de ciclos de CPU (RDTSC/RDTSCP)
 comandos/        Programas ejecutables que usan las librerías
   monitor/       Comandos relacionados con el framebuffer
-tests/           Suite de tests
+  chrono/        Comandos de medición y benchmarking
+  tests/         Tests unitarios ejecutables de las librerías
+tests/           Suite de tests smoke
 ```
 
 ## Modos de uso
@@ -99,17 +103,25 @@ sudo ./draw_pixel 100 100 0xFF0000
 
 ## Comandos disponibles
 
-Los comandos viven en `comandos/monitor/`. Cada uno acepta `-h` para ver su
-ayuda.
+### Framebuffer (`comandos/monitor/`)
+
+Cada comando acepta `-h` para ver su ayuda. Todos soportan argumentos
+numéricos en decimal, hexadecimal (`0x...`), binario (`0b...`) y octal (`0o...`).
 
 | Comando | Descripción |
 |---|---|
 | `fb_core` | Diagnóstico del framebuffer (resolución, bpp, offsets de color). |
 | `draw_pixel` | Dibuja un píxel en (X, Y) del color indicado. |
 | `draw_rect` | Dibuja un rectángulo sólido con clipping inteligente. |
+| `draw_line` | Dibuja una línea entre dos puntos con clipping Cohen-Sutherland. |
+| `draw_circle` | Dibuja un círculo con algoritmo de punto medio. |
+| `screenshot` | Captura el framebuffer y lo guarda como archivo BMP. |
 
-Cada comando soporta argumentos numéricos en decimal, hexadecimal (`0x...`),
-binario (`0b...`) y octal (`0o...`).
+### Benchmarking (`comandos/chrono/`)
+
+| Comando | Descripción |
+|---|---|
+| `bench_rect` | Mide en ticks de CPU el coste de pintar un rectángulo de pantalla completa. |
 
 ## Targets del Makefile
 
@@ -122,6 +134,20 @@ make run                 # Ejecuta el binario compilado localmente
 make deploy SRC=<...>    # Compila y despliega en equipo remoto (modo SSH)
 make info                # Muestra la configuración actual
 make help                # Muestra esta ayuda
+```
+
+## Tests
+
+La suite de tests (`make test`) no requiere framebuffer ni sudo. Compila todos
+los comandos, verifica que responden a `-h` y rechazan argumentos inválidos, y
+ejecuta los tests unitarios de las librerías matemáticas.
+
+Los tests unitarios de cada librería viven en `comandos/tests/` y son binarios
+autónomos que imprimen `OK/FAIL` por caso e informan su resultado vía exit code.
+
+```bash
+make test                          # Suite completa
+./bin/math_int32                   # Solo tests de lib/math/int32
 ```
 
 ## Depuración
