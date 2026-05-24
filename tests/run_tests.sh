@@ -227,6 +227,31 @@ test_make_target() {
 }
 
 # ==============================================================================
+# FUNCIÓN: test_unit_binary
+# Ejecuta un binario ya compilado y verifica su exit code.
+# El binario es responsable de imprimir sus propios resultados.
+# ==============================================================================
+test_unit_binary() {
+    local CMD_NAME="$1"
+    local DESC="$CMD_NAME (tests unitarios)"
+    local BIN="$PROJECT_ROOT/bin/$CMD_NAME"
+
+    if [ ! -x "$BIN" ]; then
+        assert_fail "$DESC" "binario no existe (compilación previa falló?)"
+        return
+    fi
+
+    "$BIN"
+    local EXIT_CODE=$?
+
+    if [ $EXIT_CODE -eq 0 ]; then
+        assert_pass "$DESC"
+    else
+        assert_fail "$DESC" "exit $EXIT_CODE — algún caso falló (ver salida arriba)"
+    fi
+}
+
+# ==============================================================================
 # EJECUCIÓN DE TESTS
 # ==============================================================================
 
@@ -246,6 +271,7 @@ test_file_exists "config.example.mk"
 test_file_exists "monitor_comandos.sh"
 
 test_dir_exists "lib"
+test_dir_exists "lib/math/int32"
 test_dir_exists "comandos"
 test_dir_exists "tests"
 
@@ -258,15 +284,26 @@ section "Compilación de los comandos"
 test_command_compiles "comandos/monitor/core/fb_core.asm"
 test_command_compiles "comandos/monitor/draw_pixel/draw_pixel.asm"
 test_command_compiles "comandos/monitor/draw_rect/draw_rect.asm"
+test_command_compiles "comandos/monitor/draw_line/draw_line.asm"
+test_command_compiles "comandos/monitor/draw_circle/draw_circle.asm"
+test_command_compiles "comandos/chrono/bench_rect/bench_rect.asm"
 
-# --- Sección 3: Comportamiento ante -h (ayuda) ---
+# --- Sección 3: Compilación de tests unitarios ---
+section "Compilación de tests unitarios"
+
+test_command_compiles "comandos/tests/math_int32/math_int32.asm"
+
+# --- Sección 4: Comportamiento ante -h (ayuda) ---
 section "Respuesta a -h (ayuda)"
 
 test_command_help "fb_core"
 test_command_help "draw_pixel"
 test_command_help "draw_rect"
+test_command_help "draw_line"
+test_command_help "draw_circle"
+test_command_help "bench_rect"
 
-# --- Sección 4: Comportamiento ante argumentos inválidos ---
+# --- Sección 5: Comportamiento ante argumentos inválidos ---
 section "Validación de argumentos"
 
 # fb_core no acepta argumentos posicionales (solo -h), así que sin args
@@ -274,11 +311,18 @@ section "Validación de argumentos"
 
 test_command_rejects_no_args "draw_pixel"
 test_command_rejects_no_args "draw_rect"
+test_command_rejects_no_args "draw_line"
+test_command_rejects_no_args "draw_circle"
 
 test_command_rejects_garbage "draw_pixel" "basura1" "basura2" "basura3"
-test_command_rejects_garbage "draw_rect" "basura1" "basura2" "basura3" "basura4" "basura5"
+test_command_rejects_garbage "draw_rect"  "basura1" "basura2" "basura3" "basura4" "basura5"
 
-# --- Sección 5: Targets del Makefile ---
+# --- Sección 6: Tests unitarios de librerías ---
+section "Tests unitarios de librerías"
+
+test_unit_binary "math_int32"
+
+# --- Sección 7: Targets del Makefile ---
 section "Targets del Makefile"
 
 test_make_target "help"
