@@ -2,6 +2,7 @@
 ; RUTA: ./comandos/monitor/draw_line/draw_line.asm
 ; DESCRIPCIÓN: Dibuja una línea en el Framebuffer entre dos puntos dados.
 ;              Usa clipping Cohen-Sutherland y rasterización Bresenham.
+;              Añadido flag --tics para medir ticks de CPU del dibujado.
 ; ==============================================================================
 
 %include "lib/constants.inc"
@@ -14,52 +15,60 @@ extern fb_core, fb_map
 extern lib_draw_linecval
 extern lib_string_int32cval
 extern lib_color_pack
+extern lib_rdtsc_init, lib_rdtsc_start, lib_rdtsc_stop, lib_rdtsc_method
 extern print_string, print_nl, print_int
 
 section .bss
-    datos_fb resb ScreenInfo_size
-    coord_x1 resd 1
-    coord_y1 resd 1
-    coord_x2 resd 1
-    coord_y2 resd 1
-    color    resd 1
+    datos_fb  resb ScreenInfo_size
+    coord_x1  resd 1
+    coord_y1  resd 1
+    coord_x2  resd 1
+    coord_y2  resd 1
+    color     resd 1
+    flag_tics resb 1
+    ticks_val resq 1
 
 section .data
-    ; --- TEXTOS DE AYUDA (-h) ---
-    msg_ayuda_1 db "Uso: draw_line [X1] [Y1] [X2] [Y2] [COLOR]", 10, 0
+    msg_ayuda_1 db "Uso: draw_line [X1] [Y1] [X2] [Y2] [COLOR] [--tics]", 10, 0
     msg_ayuda_2 db "Descripcion: Dibuja una linea entre dos puntos (Bresenham + clipping).", 10, 10, 0
     msg_ayuda_3 db "Argumentos:", 10, 0
     msg_ayuda_4 db "  X1, Y1  Coordenadas del punto origen (aceptan negativos).", 10, 0
     msg_ayuda_5 db "  X2, Y2  Coordenadas del punto destino (aceptan negativos).", 10, 0
     msg_ayuda_6 db "  COLOR   Valor del color (soporta multiples bases numericas).", 10, 0
-    msg_ayuda_7 db "  -h      Muestra este panel de ayuda.", 10, 10, 0
-    msg_ayuda_8 db "Ejemplos desde Bash:", 10, 0
-    msg_ayuda_9 db "  sudo ./bin/draw_line 0 0 1919 1079 0xFFFFFF   ; Diagonal blanca", 10, 0
-    msg_ayuda_A db "  sudo ./bin/draw_line 960 0 960 1079 0xFF0000  ; Linea vertical roja", 10, 0
-    msg_ayuda_B db "  sudo ./bin/draw_line -100 540 2000 540 0x00FF00 ; Horizontal recortada", 10, 0
+    msg_ayuda_7 db "  --tics  Ticks de CPU consumidos por el dibujado.", 10, 0
+    msg_ayuda_8 db "  -h      Muestra este panel de ayuda.", 10, 10, 0
+    msg_ayuda_9 db "Ejemplos desde Bash:", 10, 0
+    msg_ayuda_A db "  draw_line 0 0 1279 799 0xFFFFFF          ; Diagonal blanca", 10, 0
+    msg_ayuda_B db "  draw_line 640 0 640 799 0xFF0000          ; Linea vertical roja", 10, 0
+    msg_ayuda_C db "  draw_line 0 0 1279 799 0xFFFFFF --tics   ; Con medicion", 10, 0
 
     msg_error_args   db "Error: Numero de argumentos incorrecto. Usa '-h' para ayuda.", 10, 0
     msg_error_numero db "Error: Argumento no es un numero valido.", 10, 0
-    msg_error_fb     db "Error: No se pudo inicializar /dev/fb0. ¿Ejecutaste con sudo?", 10, 0
+    msg_error_fb     db "Error: No se pudo inicializar /dev/fb0.", 10, 0
     msg_error_fuera  db "Error: La linea esta completamente fuera de los limites.", 10, 0
     msg_exito        db "Linea dibujada correctamente.", 10, 0
+    msg_tics         db "Tics: ", 0
+    msg_met_pre      db "  [", 0
+    msg_met_post     db "]", 10, 0
+
+    str_tics         db "--tics", 0
 
 section .text
     global _start
 
 _start:
-    ; --- Establecer frame de pila ANTES de leer args ---
     mov rbp, rsp
     and rsp, -16
 
-    ; 1. Extraer argumentos — TODOS a través de RBP
-    mov rbx, [rbp]          ; argc
-    mov r12, [rbp + 16]     ; argv[1] (X1 o -h)
+    call lib_rdtsc_init
 
-    ; 2. Comprobar si se pide ayuda
+    mov rbx, [rbp]
+    mov r12, [rbp + 16]
+
+    mov byte [flag_tics], 0
+
     cmp rbx, 2
     jne .verificar_argumentos
-
     mov al, byte [r12]
     cmp al, '-'
     jne .error_args
@@ -69,37 +78,54 @@ _start:
     jmp .error_args
 
 .verificar_argumentos:
-    ; Verificar 6 argumentos (comando + 5 parámetros)
     cmp rbx, 6
-    jne .error_args
+    je .parsear
+    cmp rbx, 7
+    je .comprobar_tics
+    jmp .error_args
 
-    ; --- 3. CONVERSIÓN CON VALIDACIÓN ---
-    mov rdi, r12                ; argv[1] = X1
+.comprobar_tics:
+    mov rdi, [rbp + 56]     ; argv[6]
+    mov rsi, str_tics
+.cmp_loop:
+    mov al, byte [rdi]
+    mov cl, byte [rsi]
+    cmp al, cl
+    jne .error_args
+    test al, al
+    jz .tics_ok
+    inc rdi
+    inc rsi
+    jmp .cmp_loop
+.tics_ok:
+    mov byte [flag_tics], 1
+
+.parsear:
+    mov rdi, r12
     call lib_string_int32cval
     jc .error_numero
     mov dword [coord_x1], eax
 
-    mov rdi, [rbp + 24]         ; argv[2] = Y1
+    mov rdi, [rbp + 24]
     call lib_string_int32cval
     jc .error_numero
     mov dword [coord_y1], eax
 
-    mov rdi, [rbp + 32]         ; argv[3] = X2
+    mov rdi, [rbp + 32]
     call lib_string_int32cval
     jc .error_numero
     mov dword [coord_x2], eax
 
-    mov rdi, [rbp + 40]         ; argv[4] = Y2
+    mov rdi, [rbp + 40]
     call lib_string_int32cval
     jc .error_numero
     mov dword [coord_y2], eax
 
-    mov rdi, [rbp + 48]         ; argv[5] = Color
+    mov rdi, [rbp + 48]
     call lib_string_int32cval
     jc .error_numero
     mov dword [color], eax
 
-    ; --- 4. INICIALIZAR FRAMEBUFFER ---
     mov rdi, datos_fb
     call fb_core
     test rax, rax
@@ -110,13 +136,16 @@ _start:
     test rax, rax
     js .error_fb
 
-    ; --- 5. TRADUCCIÓN AL HARDWARE NATIVO ---
     mov rdi, datos_fb
     mov esi, dword [color]
     call lib_color_pack
     mov dword [color], eax
 
-    ; --- 6. DIBUJAR LÍNEA ---
+    cmp byte [flag_tics], 1
+    jne .dibujar
+    call lib_rdtsc_start
+
+.dibujar:
     mov rdi, datos_fb
     mov esi, dword [coord_x1]
     mov edx, dword [coord_y1]
@@ -126,7 +155,26 @@ _start:
     call lib_draw_linecval
     jc .error_fuera
 
-    ; --- 7. ÉXITO ---
+    cmp byte [flag_tics], 1
+    jne .exito
+    call lib_rdtsc_stop
+    mov qword [ticks_val], rax
+    mov rdi, msg_exito
+    call print_string
+    mov rdi, msg_tics
+    call print_string
+    mov rdi, qword [ticks_val]
+    call print_int
+    mov rdi, msg_met_pre
+    call print_string
+    call lib_rdtsc_method
+    mov rdi, rax
+    call print_string
+    mov rdi, msg_met_post
+    call print_string
+    sys_exit 0
+
+.exito:
     mov rdi, msg_exito
     call print_string
     sys_exit 0
@@ -153,6 +201,8 @@ _start:
     mov rdi, msg_ayuda_A
     call print_string
     mov rdi, msg_ayuda_B
+    call print_string
+    mov rdi, msg_ayuda_C
     call print_string
     sys_exit 0
 
