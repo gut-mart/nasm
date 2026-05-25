@@ -32,21 +32,33 @@ lib/             Librerías NASM reutilizables (se empaquetan en libcore.a)
   cnv/           Conversiones (string ↔ entero)
   graph/         Gráficos: framebuffer, color, dibujado
   io/            Entrada/salida básica
-  math/          Matemáticas enteras (abs, min, max, clamp)
+  math/          Matemáticas enteras
+    int32/       abs, min, max, clamp — capas fast + cval por operación
   chrono/        Medición de ciclos de CPU (RDTSC/RDTSCP)
 comandos/        Programas ejecutables que usan las librerías
   monitor/       Comandos relacionados con el framebuffer
   chrono/        Comandos de medición y benchmarking
+  tools/         Herramientas de desarrollo y utilidades
+    math/        Calculadora de operaciones enteras desde CLI
   tests/         Tests unitarios ejecutables de las librerías
 tests/           Suite de tests smoke
+```
+
+## Patrón de capas de las librerías
+
+Todas las librerías con validación siguen el mismo patrón de dos capas:
+
+- **`fast`** — motor puro, asume entrada válida, la llaman otras librerías.
+- **`cval`** — escudo con validación, usa CF=1 para señalizar errores,
+  la llaman los comandos directamente.
+
+```
+comando → lib_XYZcval → (si válido) lib_XYZfast
 ```
 
 ## Modos de uso
 
 ### Modo local: una sola máquina sin entorno gráfico
-
-Si trabajas directamente en una máquina Linux sin compositor gráfico (TTY
-pura, o servidor headless), todo el flujo cabe en una sola sesión:
 
 ```bash
 git clone https://github.com/gut-mart/nasm.git
@@ -58,45 +70,26 @@ sudo ./bin/draw_pixel 100 100 0xFF0000
 
 ### Modo remoto: equipo gráfico + equipo headless por SSH
 
-Es el flujo principal del autor. Se edita y compila en un equipo con entorno
-gráfico, y se ejecuta el binario por SSH en un equipo headless dentro de la
-misma red WiFi.
-
 Configuración inicial (una sola vez):
 
 ```bash
 git clone https://github.com/gut-mart/nasm.git
 cd nasm
 ./setup.sh
-
-# Tu config personal: alias SSH, ruta remota, puerto de gdbserver
 cp config.example.mk config.local.mk
 nano config.local.mk
 ```
 
-Para que VS Code pueda conectarse al equipo remoto al pulsar F5, define la
-variable de entorno con la IP del equipo (en `~/.bashrc` o equivalente):
+Para depuración remota con VS Code, define la IP del equipo remoto:
 
 ```bash
-export NASM_REMOTE_HOST=192.168.1.X   # sustituye por la IP real de tu equipo remoto
+export NASM_REMOTE_HOST=192.168.1.X
 ```
-
-Tras añadir la variable, reinicia VS Code para que la lea.
 
 Uso diario:
 
 ```bash
 make deploy SRC=comandos/monitor/draw_pixel/draw_pixel.asm
-# Compila localmente, copia el binario al equipo remoto via scp
-# y arranca gdbserver para depuración con VS Code.
-```
-
-Para ejecutar sin depurar (sin gdbserver), conéctate por SSH y ejecuta
-manualmente:
-
-```bash
-ssh tu_equipo_remoto
-sudo ./draw_pixel 100 100 0xFF0000
 ```
 
 `config.local.mk` está en `.gitignore`, no se sube al repositorio.
@@ -123,6 +116,27 @@ numéricos en decimal, hexadecimal (`0x...`), binario (`0b...`) y octal (`0o...`
 |---|---|
 | `bench_rect` | Mide en ticks de CPU el coste de pintar un rectángulo de pantalla completa. |
 
+### Herramientas matemáticas (`comandos/tools/math/`)
+
+Calculadora de operaciones enteras desde CLI. Útil durante el desarrollo
+para verificar cálculos sin salir del terminal. Todos aceptan `-h` y soportan
+múltiples bases numéricas.
+
+| Comando | Uso | Descripción |
+|---|---|---|
+| `abs` | `abs VALOR` | Valor absoluto de un int32. |
+| `min` | `min A B` | Mínimo de dos int32. |
+| `max` | `max A B` | Máximo de dos int32. |
+| `clamp` | `clamp VAL LO HI` | Limita VAL al rango [LO, HI]. |
+
+```bash
+./bin/abs -42          # → 42
+./bin/min 3 7          # → 3
+./bin/max -5 2         # → 2
+./bin/clamp 15 0 10    # → 10
+./bin/clamp 5 10 0     # → Error: rango invalido (LO > HI)
+```
+
 ## Targets del Makefile
 
 ```bash
@@ -140,34 +154,29 @@ make help                # Muestra esta ayuda
 
 La suite de tests (`make test`) no requiere framebuffer ni sudo. Compila todos
 los comandos, verifica que responden a `-h` y rechazan argumentos inválidos, y
-ejecuta los tests unitarios de las librerías matemáticas.
+ejecuta los tests unitarios de las librerías.
 
-Los tests unitarios de cada librería viven en `comandos/tests/` y son binarios
-autónomos que imprimen `OK/FAIL` por caso e informan su resultado vía exit code.
+Los tests unitarios viven en `comandos/tests/` y son binarios autónomos que
+imprimen `OK/FAIL` por caso e informan su resultado vía exit code.
 
 ```bash
-make test                          # Suite completa
-./bin/math_int32                   # Solo tests de lib/math/int32
+make test              # Suite completa
+./bin/math_int32       # Solo tests de lib/math/int32 (29 casos: fast + cval)
 ```
 
 ## Depuración
 
-El proyecto compila siempre con símbolos DWARF (`-g -F dwarf` en NASM) para
-permitir depuración por línea de código fuente con GDB.
+El proyecto compila siempre con símbolos DWARF (`-g -F dwarf` en NASM).
 
-- **Local:** abre el binario con `gdb ./bin/draw_pixel` o usa la
-  configuración "Depurar Local (GDB)" en VS Code (F5).
-- **Remoto:** `make deploy` arranca un `gdbserver` en el equipo remoto. En VS
-  Code, selecciona la configuración "Depurar Remoto (SSH + gdbserver)" y
-  pulsa F5. Requiere haber definido la variable de entorno
-  `NASM_REMOTE_HOST` con la IP del equipo remoto.
+- **Local:** `gdb ./bin/draw_pixel` o configuración "Depurar Local (GDB)" en VS Code.
+- **Remoto:** `make deploy` arranca `gdbserver` en el equipo remoto. Selecciona
+  "Depurar Remoto (SSH + gdbserver)" en VS Code y pulsa F5.
 
 ## Filosofía del proyecto
 
 - **Sin librerías externas.** Solo syscalls Linux directas. Nada de libc.
 - **x86_64 Linux exclusivamente.** Sin objetivo de portabilidad.
-- **Pequeñas librerías reutilizables.** Cada librería tiene una sola
-  responsabilidad y se compone con las demás.
+- **Una librería, una responsabilidad.** Capas `fast` y `cval` separadas.
 - **Pruebas reales en hardware sin entorno gráfico.** El framebuffer es
   hardware real, no se simula.
 
