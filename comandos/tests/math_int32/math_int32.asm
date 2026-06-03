@@ -1,6 +1,6 @@
 ; ==============================================================================
 ; RUTA: ./comandos/tests/math_int32/math_int32.asm
-; DESCRIPCIÓN: Test unitario de lib/math/int32 (abs, min, max, clamp).
+; DESCRIPCIÓN: Test unitario de lib/math/int32 (abs, min, max, clamp, div, mod).
 ;              Prueba las capas fast y cval de cada operación.
 ;              Imprime OK/FAIL por cada caso. Devuelve exit 0 si todos pasan,
 ;              exit 1 si alguno falla. No requiere framebuffer ni sudo.
@@ -23,6 +23,10 @@ extern lib_math_max_int32fast
 extern lib_math_max_int32cval
 extern lib_math_clamp_int32fast
 extern lib_math_clamp_int32cval
+extern lib_math_div_int32fast
+extern lib_math_div_int32cval
+extern lib_math_mod_int32fast
+extern lib_math_mod_int32cval
 extern print_string, print_nl
 
 section .data
@@ -37,6 +41,10 @@ section .data
     msg_sep_max_cval   db "--- max (cval) ---", 10, 0
     msg_sep_clamp_fast db "--- clamp (fast) ---", 10, 0
     msg_sep_clamp_cval db "--- clamp (cval) ---", 10, 0
+    msg_sep_div_fast   db "--- div (fast) ---", 10, 0
+    msg_sep_div_cval   db "--- div (cval) ---", 10, 0
+    msg_sep_mod_fast   db "--- mod (fast) ---", 10, 0
+    msg_sep_mod_cval   db "--- mod (cval) ---", 10, 0
 
     ; abs fast
     t_abs_f1 db "abs( 5)        = 5", 0
@@ -80,6 +88,30 @@ section .data
     t_clamp_c3 db "clamp(15, 0,10) CF=0, EAX=10", 0
     t_clamp_c4 db "clamp( 5, 5, 5) CF=0, EAX=5", 0
     t_clamp_c5 db "clamp( 5,10, 0) CF=1 (rango invalido)", 0
+
+    ; div fast
+    t_div_f1 db "div( 7, 2)     = 3", 0
+    t_div_f2 db "div(-7, 2)     = -3  (trunca a cero)", 0
+    t_div_f3 db "div( 7,-2)     = -3", 0
+    t_div_f4 db "div( 6, 3)     = 2", 0
+
+    ; div cval
+    t_div_c1 db "div( 7, 2)     CF=0, EAX=3", 0
+    t_div_c2 db "div(-7, 2)     CF=0, EAX=-3", 0
+    t_div_c3 db "div( 5, 0)     CF=1 (division por cero)", 0
+    t_div_c4 db "div(INT32_MIN,-1) CF=1 (overflow)", 0
+
+    ; mod fast
+    t_mod_f1 db "mod( 7, 2)     = 1", 0
+    t_mod_f2 db "mod(-7, 2)     = -1  (signo dividendo)", 0
+    t_mod_f3 db "mod( 7,-2)     = 1", 0
+    t_mod_f4 db "mod( 6, 3)     = 0", 0
+
+    ; mod cval
+    t_mod_c1 db "mod( 7, 2)     CF=0, EAX=1", 0
+    t_mod_c2 db "mod(-7, 2)     CF=0, EAX=-1", 0
+    t_mod_c3 db "mod( 5, 0)     CF=1 (division por cero)", 0
+    t_mod_c4 db "mod(INT32_MIN,-1) CF=1 (overflow)", 0
 
 section .bss
     fallos resd 1
@@ -422,6 +454,202 @@ _start:
     call .imprimir
 
     ; =========================================================================
+    ; DIV FAST
+    ; =========================================================================
+    mov rdi, msg_sep_div_fast
+    call print_string
+
+    mov edi, 7
+    mov esi, 2
+    call lib_math_div_int32fast
+    cmp eax, 3
+    call .registrar
+    mov rdi, t_div_f1
+    call .imprimir
+
+    mov edi, -7
+    mov esi, 2
+    call lib_math_div_int32fast
+    cmp eax, -3
+    call .registrar
+    mov rdi, t_div_f2
+    call .imprimir
+
+    mov edi, 7
+    mov esi, -2
+    call lib_math_div_int32fast
+    cmp eax, -3
+    call .registrar
+    mov rdi, t_div_f3
+    call .imprimir
+
+    mov edi, 6
+    mov esi, 3
+    call lib_math_div_int32fast
+    cmp eax, 2
+    call .registrar
+    mov rdi, t_div_f4
+    call .imprimir
+
+    ; =========================================================================
+    ; DIV CVAL
+    ; =========================================================================
+    mov rdi, msg_sep_div_cval
+    call print_string
+
+    mov edi, 7
+    mov esi, 2
+    call lib_math_div_int32cval
+    jc .div_c1_fail
+    cmp eax, 3
+    call .registrar
+    jmp .div_c1_done
+.div_c1_fail:
+    call .forzar_fallo
+.div_c1_done:
+    mov rdi, t_div_c1
+    call .imprimir
+
+    mov edi, -7
+    mov esi, 2
+    call lib_math_div_int32cval
+    jc .div_c2_fail
+    cmp eax, -3
+    call .registrar
+    jmp .div_c2_done
+.div_c2_fail:
+    call .forzar_fallo
+.div_c2_done:
+    mov rdi, t_div_c2
+    call .imprimir
+
+    ; división por cero → CF=1
+    mov edi, 5
+    mov esi, 0
+    call lib_math_div_int32cval
+    jnc .div_c3_fail
+    cmp eax, 0
+    call .registrar
+    jmp .div_c3_done
+.div_c3_fail:
+    call .forzar_fallo
+.div_c3_done:
+    mov rdi, t_div_c3
+    call .imprimir
+
+    ; INT32_MIN / -1 → CF=1 (overflow)
+    mov edi, INT32_MIN
+    mov esi, -1
+    call lib_math_div_int32cval
+    jnc .div_c4_fail
+    cmp eax, INT32_MIN
+    call .registrar
+    jmp .div_c4_done
+.div_c4_fail:
+    call .forzar_fallo
+.div_c4_done:
+    mov rdi, t_div_c4
+    call .imprimir
+
+    ; =========================================================================
+    ; MOD FAST
+    ; =========================================================================
+    mov rdi, msg_sep_mod_fast
+    call print_string
+
+    mov edi, 7
+    mov esi, 2
+    call lib_math_mod_int32fast
+    cmp eax, 1
+    call .registrar
+    mov rdi, t_mod_f1
+    call .imprimir
+
+    mov edi, -7
+    mov esi, 2
+    call lib_math_mod_int32fast
+    cmp eax, -1
+    call .registrar
+    mov rdi, t_mod_f2
+    call .imprimir
+
+    mov edi, 7
+    mov esi, -2
+    call lib_math_mod_int32fast
+    cmp eax, 1
+    call .registrar
+    mov rdi, t_mod_f3
+    call .imprimir
+
+    mov edi, 6
+    mov esi, 3
+    call lib_math_mod_int32fast
+    cmp eax, 0
+    call .registrar
+    mov rdi, t_mod_f4
+    call .imprimir
+
+    ; =========================================================================
+    ; MOD CVAL
+    ; =========================================================================
+    mov rdi, msg_sep_mod_cval
+    call print_string
+
+    mov edi, 7
+    mov esi, 2
+    call lib_math_mod_int32cval
+    jc .mod_c1_fail
+    cmp eax, 1
+    call .registrar
+    jmp .mod_c1_done
+.mod_c1_fail:
+    call .forzar_fallo
+.mod_c1_done:
+    mov rdi, t_mod_c1
+    call .imprimir
+
+    mov edi, -7
+    mov esi, 2
+    call lib_math_mod_int32cval
+    jc .mod_c2_fail
+    cmp eax, -1
+    call .registrar
+    jmp .mod_c2_done
+.mod_c2_fail:
+    call .forzar_fallo
+.mod_c2_done:
+    mov rdi, t_mod_c2
+    call .imprimir
+
+    ; módulo por cero → CF=1
+    mov edi, 5
+    mov esi, 0
+    call lib_math_mod_int32cval
+    jnc .mod_c3_fail
+    cmp eax, 0
+    call .registrar
+    jmp .mod_c3_done
+.mod_c3_fail:
+    call .forzar_fallo
+.mod_c3_done:
+    mov rdi, t_mod_c3
+    call .imprimir
+
+    ; INT32_MIN % -1 → CF=1 (overflow interceptado)
+    mov edi, INT32_MIN
+    mov esi, -1
+    call lib_math_mod_int32cval
+    jnc .mod_c4_fail
+    cmp eax, 0
+    call .registrar
+    jmp .mod_c4_done
+.mod_c4_fail:
+    call .forzar_fallo
+.mod_c4_done:
+    mov rdi, t_mod_c4
+    call .imprimir
+
+    ; =========================================================================
     ; RESULTADO FINAL
     ; =========================================================================
     call print_nl
@@ -463,3 +691,6 @@ _start:
     call print_string
     call print_nl
     ret
+
+
+
