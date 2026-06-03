@@ -86,7 +86,7 @@ _start:
     mov esi, dword [val_b]
     call lib_math_min_int32cval
 
-    mov edi, eax
+    movsxd rdi, eax
     call print_int
     call print_nl
     sys_exit 0

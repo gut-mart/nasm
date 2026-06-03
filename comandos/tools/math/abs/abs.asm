@@ -75,7 +75,7 @@ _start:
     call lib_math_abs_int32cval
 
     ; --- Imprimir resultado ---
-    mov edi, eax
+    movsxd rdi, eax
     call print_int
     call print_nl
 

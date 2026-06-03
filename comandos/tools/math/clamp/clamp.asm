@@ -106,7 +106,7 @@ _start:
     call lib_math_clamp_int32cval
     jc .error_rango
 
-    mov edi, eax
+    movsxd rdi, eax
     call print_int
     call print_nl
     sys_exit 0
