@@ -63,7 +63,7 @@ lib_uint32_string.inc     ← reservado para constantes futuras
 Toda operación que pueda recibir entrada inválida se implementa en dos capas:
 
 ```
-comando → lib_XYZcval → (si válido, tail-call) → lib_XYZfast
+comando → lib_XYZcval → (si válido) → lib_XYZfast
 librería → lib_XYZfast   (directamente, sin validar)
 ```
 
@@ -72,22 +72,24 @@ librería → lib_XYZfast   (directamente, sin validar)
 - **Quién la llama:** el comando directamente.
 - **Responsabilidad:** validar la entrada y comunicar errores.
 - **Mecanismo de error:** Carry Flag CF=1.
-- **Si la entrada es válida:** `clc` + `jmp lib_XYZfast` (tail-call).
+- **Si la entrada es válida:** ejecutar el motor y dejar CF=0 (ver sección 7
+  para el modo correcto de delegar según si `fast` altera CF).
 - **Si la entrada es inválida:** establecer EAX apropiado + `stc` + `ret`.
 - **No repite lógica** del motor: delega siempre en `fast`.
 
 ### Capa `fast` — Motor
 
-- **Quién la llama:** otras librerías, o `cval` via tail-call.
+- **Quién la llama:** otras librerías, o `cval`.
 - **Responsabilidad:** ejecutar la operación asumiendo entrada válida.
 - **Sin validaciones.** Sin comprobaciones de rango ni formato.
-- **CF:** no modificado intencionadamente (así el `clc` previo de `cval` persiste).
+- **CF:** ver sección 7. Puede o no alterar CF según las instrucciones que use;
+  esto determina cómo debe delegar la capa `cval`.
 
 ### Cuándo NO aplicar el patrón
 
 Si la operación no tiene entrada inválida posible (por ejemplo `min` y `max`
 sobre cualquier par de int32), la capa `cval` existe igualmente para mantener
-uniformidad, pero solo hace `clc` + tail-call sin ninguna comprobación.
+uniformidad, pero solo ejecuta el motor y fuerza CF=0 sin ninguna comprobación.
 
 ---
 
@@ -102,12 +104,11 @@ Regla universal en todo el proyecto:
 
 ### Reglas de implementación
 
-- La capa `fast` **nunca toca CF** intencionadamente. Devuelve lo que calcula.
-- La capa `cval` **siempre establece CF** antes de retornar o de hacer tail-call:
-  - `clc` antes del `jmp lib_XYZfast` (caso válido).
-  - `stc` antes del `ret` (caso inválido).
-- Excepción: `lib_string_int32fast` hace `clc` explícito al final como
-  documentación de contrato, aunque el llamante normal sea `cval`.
+- La capa `fast` calcula y devuelve el resultado. Puede alterar CF como efecto
+  secundario de sus instrucciones (ver sección 7).
+- La capa `cval` **siempre garantiza un CF correcto** antes de retornar:
+  - CF=0 en caso válido.
+  - CF=1 (`stc`) en caso inválido.
 
 ---
 
@@ -159,7 +160,33 @@ tras la alineación.
 
 ---
 
-## 5. Estructura interna de un archivo de librería
+## 5. Extensión de signo al pasar int32 a funciones de 64 bits
+
+`print_int` y otras funciones de I/O reciben el argumento en `RDI` (64 bits)
+y lo tratan como entero con signo de 64 bits. Cuando un comando tiene un
+resultado int32 en `EAX` que puede ser negativo, **debe extender el signo a
+64 bits antes de llamar**:
+
+```nasm
+; CORRECTO — extiende el signo de 32 a 64 bits
+movsxd rdi, eax
+call print_int
+
+; INCORRECTO — deja basura/ceros en la parte alta de RDI
+mov edi, eax        ; -3 (0xFFFFFFFD) se ve como 4294967293 en RDI
+call print_int
+```
+
+**Síntoma del error:** un número negativo se imprime como su equivalente
+unsigned grande (ej. `-3` aparece como `4294967293`).
+
+**Regla:** al pasar un int32 con signo a una función que lo lee como 64 bits,
+usar siempre `movsxd rdi, eax`. Solo usar `mov edi, eax` si el valor es
+inequívocamente no negativo (un contador, un tamaño, etc.).
+
+---
+
+## 6. Estructura interna de un archivo de librería
 
 ### Cabecera obligatoria
 
@@ -181,11 +208,9 @@ tras la alineación.
 ```nasm
 default rel             ; siempre presente
 
-; %include solo si se necesita
-%include "lib/math/int32/lib_math_int32.inc"
+%include "lib/math/int32/lib_math_int32.inc"   ; solo si se necesita
 
-; extern solo si se llama a otra función
-extern lib_XYZfast
+extern lib_XYZfast      ; solo si se llama a otra función
 
 section .text
     global lib_nombre_función
@@ -205,7 +230,69 @@ lib_math_abs_int32fast:
 
 ---
 
-## 6. Funciones leaf vs. no-leaf
+## 7. Delegación de cval a fast y preservación de CF (CRÍTICO)
+
+Esta es la regla más sutil del proyecto y la fuente de un bug real corregido
+en 2026-06. Determina **cómo** la capa `cval` debe llamar a `fast`.
+
+### El problema
+
+La capa `cval` quiere devolver CF=0 en caso válido. Tiene dos formas de delegar
+en `fast`:
+
+```nasm
+; OPCIÓN A — tail-call con clc previo
+clc
+jmp lib_XYZfast
+
+; OPCIÓN B — call + clc + ret
+call lib_XYZfast
+clc
+ret
+```
+
+La opción A **solo funciona si `fast` NO altera CF**. Si `fast` contiene
+cualquier `cmp`, `test`, `add`, `sub`, `idiv` u otra instrucción que modifique
+CF, el `clc` previo se pierde: cuando `fast` hace su `ret`, el CF que ve el
+llamante es el que dejó la última instrucción aritmética de `fast`, no el `clc`.
+
+### La regla
+
+| Caso | Cómo debe delegar `cval` |
+|---|---|
+| `fast` NO altera CF (solo `mov`, `imul`, `shl`, `lea`...) | Opción A: `clc` + `jmp fast` |
+| `fast` SÍ altera CF (`cmp`, `test`, `idiv`, `add`, `sub`...) | Opción B: `call fast` + `clc` + `ret` |
+
+### En caso de duda, usar siempre la opción B
+
+`call fast` + `clc` + `ret` es **siempre correcta**, independientemente de lo
+que haga `fast`. El coste es un frame de pila adicional (insignificante). La
+opción A es una micro-optimización que solo debe usarse cuando se ha verificado
+que `fast` no toca CF.
+
+### Ejemplos reales del proyecto
+
+```nasm
+; lib_draw_pixelcval — fast usa mov/imul/add/shr, NO toca CF → opción A válida
+clc
+jmp lib_draw_pixelfast
+
+; lib_math_min_int32cval — fast usa cmp → DEBE usar opción B
+call lib_math_min_int32fast
+clc
+ret
+```
+
+### Por qué importa
+
+El bug se manifestó así: `min(3,7)` devolvía el resultado correcto (3) pero con
+CF=1 en lugar de CF=0, porque el `cmp edi, esi` dentro de `lib_math_min_int32fast`
+dejaba CF=1 (3 < 7 activa CF en la comparación unsigned interna). El comando
+interpretaba CF=1 como error y reportaba fallo pese a tener el valor correcto.
+
+---
+
+## 8. Funciones leaf vs. no-leaf
 
 ### Función leaf
 
@@ -220,16 +307,20 @@ lib_math_min_int32fast:
     ret
 ```
 
-### Función no-leaf
+Nota: una capa `cval` que usa la opción B (`call fast`) deja de ser leaf
+técnicamente, pero como no usa registros callee-saved tampoco necesita
+prólogo/epílogo. El `call` + `ret` es suficiente.
 
-Hace `call` a otras funciones. Requiere prólogo/epílogo estándar:
+### Función no-leaf con estado
+
+Hace `call` y usa registros callee-saved. Requiere prólogo/epílogo estándar:
 
 ```nasm
 lib_algo:
     push rbp
     mov  rbp, rsp
-    push rbx            ; si usa RBX
-    push r12            ; si usa R12
+    push rbx
+    push r12
     ; ... cuerpo ...
     pop  r12
     pop  rbx
@@ -239,22 +330,7 @@ lib_algo:
 
 ---
 
-## 7. Tail-call en cval
-
-La delegación de `cval` a `fast` se hace siempre con `jmp`, nunca con `call`:
-
-```nasm
-lib_math_min_int32cval:
-    clc
-    jmp lib_math_min_int32fast      ; tail-call — NO usar call+ret
-```
-
-Esto evita un frame de pila innecesario y preserva CF entre la instrucción
-`clc` y el `ret` de `fast`.
-
----
-
-## 8. Coherencia de nombres entre archivo y símbolo global
+## 9. Coherencia de nombres entre archivo y símbolo global
 
 El nombre del símbolo `global` debe coincidir exactamente con el nombre del
 archivo sin la extensión:
@@ -267,7 +343,7 @@ archivo sin la extensión:
 
 ---
 
-## 9. Archivos `.inc`
+## 10. Archivos `.inc`
 
 - Un `.inc` por dominio tipado, no por función.
 - Siempre con guard de inclusión múltiple:
@@ -286,14 +362,14 @@ archivo sin la extensión:
 
 ---
 
-## 10. Inventario de librerías del proyecto
+## 11. Inventario de librerías del proyecto
 
 ### `lib/cnv/string_int32/` — Conversión string → int32
 
 | Archivo | Capa | Llamante |
 |---|---|---|
 | `lib_string_int32cval.asm` | cval | comandos |
-| `lib_string_int32fast.asm` | fast | `cval` via tail-call |
+| `lib_string_int32fast.asm` | fast | `cval` |
 
 ### `lib/cnv/uint32_string/` — Conversión uint32 → string
 
@@ -315,31 +391,31 @@ archivo sin la extensión:
 
 ### `lib/graph/draw/pixel/`
 
-| Archivo | Capa | Llamante |
-|---|---|---|
-| `lib_draw_pixelcval.asm` | cval | comandos |
-| `lib_draw_pixelfast.asm` | fast | `cval`, `lib_draw_linefast`, `lib_draw_circlefast` |
+| Archivo | Capa | fast toca CF | Delegación |
+|---|---|---|---|
+| `lib_draw_pixelcval.asm` | cval | No | Opción A (jmp) |
+| `lib_draw_pixelfast.asm` | fast | — | — |
 
 ### `lib/graph/draw/rect/`
 
-| Archivo | Capa | Llamante |
-|---|---|---|
-| `lib_draw_rectcval.asm` | cval | comandos |
-| `lib_draw_rectfast.asm` | fast | `cval`, `bench_rect` |
+| Archivo | Capa |
+|---|---|
+| `lib_draw_rectcval.asm` | cval |
+| `lib_draw_rectfast.asm` | fast |
 
 ### `lib/graph/draw/line/`
 
-| Archivo | Capa | Llamante |
-|---|---|---|
-| `lib_draw_linecval.asm` | cval | comandos |
-| `lib_draw_linefast.asm` | fast | `cval` |
+| Archivo | Capa |
+|---|---|
+| `lib_draw_linecval.asm` | cval |
+| `lib_draw_linefast.asm` | fast |
 
 ### `lib/graph/draw/circle/`
 
-| Archivo | Capa | Llamante |
-|---|---|---|
-| `lib_draw_circlecval.asm` | cval | comandos |
-| `lib_draw_circlefast.asm` | fast | `cval` |
+| Archivo | Capa |
+|---|---|
+| `lib_draw_circlecval.asm` | cval |
+| `lib_draw_circlefast.asm` | fast |
 
 ### `lib/graph/bmp/`
 
@@ -349,16 +425,23 @@ archivo sin la extensión:
 
 ### `lib/math/int32/`
 
-| Archivo | Capa | Llamante |
-|---|---|---|
-| `lib_math_abs_int32cval.asm` | cval | comando `abs` |
-| `lib_math_abs_int32fast.asm` | fast | otras librerías |
-| `lib_math_min_int32cval.asm` | cval | comando `min` |
-| `lib_math_min_int32fast.asm` | fast | otras librerías |
-| `lib_math_max_int32cval.asm` | cval | comando `max` |
-| `lib_math_max_int32fast.asm` | fast | otras librerías |
-| `lib_math_clamp_int32cval.asm` | cval | comando `clamp` |
-| `lib_math_clamp_int32fast.asm` | fast | otras librerías |
+Todos los `fast` usan `cmp` o `idiv`, así que todos los `cval` usan la
+opción B (`call fast` + `clc` + `ret`).
+
+| Archivo | Capa | fast toca CF | Delegación |
+|---|---|---|---|
+| `lib_math_abs_int32cval.asm` | cval | No (cmovl) | Opción B por uniformidad |
+| `lib_math_abs_int32fast.asm` | fast | — | — |
+| `lib_math_min_int32cval.asm` | cval | Sí (cmp) | Opción B |
+| `lib_math_min_int32fast.asm` | fast | — | — |
+| `lib_math_max_int32cval.asm` | cval | Sí (cmp) | Opción B |
+| `lib_math_max_int32fast.asm` | fast | — | — |
+| `lib_math_clamp_int32cval.asm` | cval | Sí (cmp) | Opción B |
+| `lib_math_clamp_int32fast.asm` | fast | — | — |
+| `lib_math_div_int32cval.asm` | cval | Sí (idiv) | Opción B |
+| `lib_math_div_int32fast.asm` | fast | — | — |
+| `lib_math_mod_int32cval.asm` | cval | Sí (idiv) | Opción B |
+| `lib_math_mod_int32fast.asm` | fast | — | — |
 
 ### `lib/chrono/`
 
@@ -370,6 +453,6 @@ archivo sin la extensión:
 
 | Archivo | Nota |
 |---|---|
-| `lib_print.asm` | Sin capa: I/O básica, sin validación de entrada |
+| `lib_print.asm` | Sin capa: I/O básica |
 | `lib_file.asm` | Sin capa: wrappers de syscall |
 | `lib_console.asm` | Sin capa: control de terminal |

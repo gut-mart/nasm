@@ -33,7 +33,7 @@ lib/             Librerías NASM reutilizables (se empaquetan en libcore.a)
   graph/         Gráficos: framebuffer, color, dibujado
   io/            Entrada/salida básica
   math/          Matemáticas enteras
-    int32/       abs, min, max, clamp — capas fast + cval por operación
+    int32/       abs, min, max, clamp, div, mod — capas fast + cval por operación
   chrono/        Medición de ciclos de CPU (RDTSC/RDTSCP)
 comandos/        Programas ejecutables que usan las librerías
   monitor/       Comandos relacionados con el framebuffer
@@ -44,6 +44,16 @@ comandos/        Programas ejecutables que usan las librerías
 tests/           Suite de tests smoke
 ```
 
+## Normas del proyecto
+
+Dos documentos definen las reglas que se siguen siempre:
+
+- [NORMAS_LIBRERIAS.md](NORMAS_LIBRERIAS.md) — nomenclatura, patrón de capas
+  fast/cval, convención ABI, contrato de Carry Flag, y la regla crítica de
+  preservación de CF al delegar de cval a fast.
+- [NORMAS_PRUEBAS.md](NORMAS_PRUEBAS.md) — flujo de trabajo, criterios de test
+  y checklist antes de cada commit.
+
 ## Patrón de capas de las librerías
 
 Todas las librerías con validación siguen el mismo patrón de dos capas:
@@ -53,7 +63,7 @@ Todas las librerías con validación siguen el mismo patrón de dos capas:
   la llaman los comandos directamente.
 
 ```
-comando → lib_XYZcval → (si válido) lib_XYZfast
+comando → lib_XYZcval → (si válido) → lib_XYZfast
 ```
 
 ## Modos de uso
@@ -128,12 +138,17 @@ múltiples bases numéricas.
 | `min` | `min A B` | Mínimo de dos int32. |
 | `max` | `max A B` | Máximo de dos int32. |
 | `clamp` | `clamp VAL LO HI` | Limita VAL al rango [LO, HI]. |
+| `div` | `div DIVIDENDO DIVISOR` | División entera (trunca hacia cero). |
+| `mod` | `mod DIVIDENDO DIVISOR` | Resto de división (signo del dividendo). |
 
 ```bash
 ./bin/abs -42          # → 42
 ./bin/min 3 7          # → 3
 ./bin/max -5 2         # → 2
 ./bin/clamp 15 0 10    # → 10
+./bin/div -7 2         # → -3
+./bin/mod -7 2         # → -1
+./bin/div 5 0          # → Error: division por cero
 ./bin/clamp 5 10 0     # → Error: rango invalido (LO > HI)
 ```
 
@@ -161,7 +176,7 @@ imprimen `OK/FAIL` por caso e informan su resultado vía exit code.
 
 ```bash
 make test              # Suite completa
-./bin/math_int32       # Solo tests de lib/math/int32 (29 casos: fast + cval)
+./bin/math_int32       # Solo tests de lib/math/int32 (41 casos: fast + cval)
 ```
 
 ## Depuración
