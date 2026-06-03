@@ -12,8 +12,9 @@
 ;            CF  = 0  rango válido (lo <= hi), resultado fiable
 ;            CF  = 1  rango inválido (lo > hi), EAX = val original sin modificar
 ;
-; NOTA: Función leaf. Sin acceso a memoria ni llamadas externas.
-;       No modifica registros callee-saved.
+; NOTA: lib_math_clamp_int32fast usa `cmp`, que altera CF. Por eso NO se puede
+;       hacer tail-call con clc previo (el cmp del motor machacaría el clc).
+;       Se usa call + clc + ret para controlar el CF final. Función leaf.
 ; ==============================================================================
 
 default rel
@@ -27,8 +28,9 @@ lib_math_clamp_int32cval:
     cmp   esi, edx              ; lo vs hi
     jg    .rango_invalido
 
-    clc                         ; CF=0: rango válido
-    jmp   lib_math_clamp_int32fast  ; tail-call al motor
+    call  lib_math_clamp_int32fast  ; EAX = valor clampeado
+    clc                             ; CF=0: rango válido
+    ret
 
 .rango_invalido:
     mov   eax, edi              ; EAX = val sin modificar

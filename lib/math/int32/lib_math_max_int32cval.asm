@@ -9,8 +9,9 @@
 ;   Salida:  EAX = max(a, b)
 ;            CF  = 0 siempre (cualquier par de int32 es entrada válida)
 ;
-; NOTA: Función leaf. Sin acceso a memoria ni llamadas externas.
-;       No modifica registros callee-saved.
+; NOTA: lib_math_max_int32fast usa `cmp`, que altera CF. Por eso NO se puede
+;       hacer tail-call con clc previo (el cmp del motor machacaría el clc).
+;       Se usa call + clc + ret para controlar el CF final. Función leaf.
 ; ==============================================================================
 
 default rel
@@ -21,5 +22,6 @@ section .text
     global lib_math_max_int32cval
 
 lib_math_max_int32cval:
+    call  lib_math_max_int32fast    ; EAX = max(a, b)
     clc                             ; CF=0: entrada siempre válida
-    jmp lib_math_max_int32fast      ; tail-call al motor
+    ret

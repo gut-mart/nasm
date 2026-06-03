@@ -9,8 +9,9 @@
 ;            CF  = 0  resultado fiable
 ;            CF  = 1  INT32_MIN detectado — resultado es INT32_MIN (overflow conocido)
 ;
-; NOTA: Función leaf. Sin acceso a memoria ni llamadas externas.
-;       No modifica registros callee-saved.
+; NOTA: lib_math_abs_int32fast usa instrucciones que NO alteran CF de forma
+;       relevante, pero por seguridad de contrato hacemos clc explícito tras
+;       volver del motor en lugar de confiar en un tail-call. Función leaf.
 ; ==============================================================================
 
 %include "lib/math/int32/lib_math_int32.inc"
@@ -27,9 +28,10 @@ lib_math_abs_int32cval:
     cmp   edi, INT32_MIN
     je    .caso_min
 
-    ; --- Caso normal: delegar en fast ---
-    clc
-    jmp   lib_math_abs_int32fast    ; tail-call
+    ; --- Caso normal: calcular y forzar CF=0 ---
+    call  lib_math_abs_int32fast    ; EAX = |valor|
+    clc                             ; CF=0: resultado fiable
+    ret
 
 .caso_min:
     mov   eax, INT32_MIN            ; abs(INT32_MIN) = INT32_MIN por overflow
