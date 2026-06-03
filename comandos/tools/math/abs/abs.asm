@@ -74,13 +74,24 @@ _start:
     mov edi, eax
     call lib_math_abs_int32cval
 
+    ; --- Capturar el CF AHORA, antes de cualquier call que lo destruya ---
+    ; print_int y print_nl modifican las flags, así que guardamos el estado
+    ; de overflow en R13 (callee-saved) antes de imprimir.
+    mov r13d, 0
+    jnc .guardar_resultado
+    mov r13d, 1             ; R13D = 1 si hubo overflow (INT32_MIN)
+
+.guardar_resultado:
+    mov r14d, eax          ; R14D = resultado (callee-saved, sobrevive a los call)
+
     ; --- Imprimir resultado ---
-    movsxd rdi, eax
+    movsxd rdi, r14d
     call print_int
     call print_nl
 
-    ; --- Si CF=1 era INT32_MIN, avisar ---
-    jnc .fin
+    ; --- Si hubo overflow, imprimir el aviso ---
+    test r13d, r13d
+    jz .fin
     mov rdi, msg_aviso_min
     call print_string
 
