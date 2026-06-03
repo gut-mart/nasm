@@ -292,6 +292,76 @@ interpretaba CF=1 como error y reportaba fallo pese a tener el valor correcto.
 
 ---
 
+## 7-bis. El CF no sobrevive a una `call` (en comandos)
+
+Corolario de la sección 7, aplicado a la capa del comando. Fuente de un segundo
+bug real corregido en 2026-06.
+
+### El problema
+
+Un comando llama a un `cval`, que devuelve CF=1 para señalar un caso especial.
+El comando quiere imprimir el resultado y *luego* consultar el CF para decidir
+si añade un aviso:
+
+```nasm
+call lib_math_abs_int32cval    ; CF=1 si fue INT32_MIN
+movsxd rdi, eax
+call print_int                 ; ← print_int modifica las flags
+call print_nl                  ; ← print_nl también
+jnc .fin                       ; ← CF ya NO vale lo que devolvió cval
+```
+
+Cuando llega el `jnc`, el CF es el que dejó la última instrucción de `print_nl`,
+no el de `cval`. El aviso nunca se imprime (o se imprime cuando no debe).
+
+### La regla
+
+**El CF, y cualquier flag, se destruye en la primera `call` posterior.** Si
+necesitas el resultado de una comparación o un CF *después* de llamar a otra
+función, guárdalo inmediatamente en un registro callee-saved:
+
+```nasm
+call lib_math_abs_int32cval
+
+; Capturar el CF AHORA, antes de cualquier call
+mov   r13d, 0
+jnc   .sin_overflow
+mov   r13d, 1          ; R13D = 1 si CF venía a 1
+.sin_overflow:
+mov   r14d, eax        ; resultado también a callee-saved
+
+movsxd rdi, r14d
+call  print_int
+call  print_nl
+
+test  r13d, r13d       ; consultar la copia, no el CF
+jz    .fin
+; ... imprimir aviso ...
+```
+
+### Cuándo NO hace falta
+
+Si el comando consulta el CF **inmediatamente** tras el `call`, antes de
+cualquier otra llamada, no hay problema. Es el patrón normal de error:
+
+```nasm
+call lib_math_clamp_int32cval
+jc   .error_rango          ; CF intacto, ninguna call de por medio
+movsxd rdi, eax
+call print_int
+```
+
+Por eso `clamp`, `div` y `mod` (que abortan con `jc` antes de imprimir) nunca
+tuvieron el bug, y solo `abs` (que imprime y luego avisa) lo necesitaba.
+
+### Resumen de las dos reglas de CF
+
+| Situación | Regla |
+|---|---|
+| `cval` delega en `fast` que usa `cmp`/`idiv` | `call fast` + `clc` + `ret` (sección 7) |
+| Comando necesita el CF tras un `call` intermedio | guardar CF en callee-saved antes del call (7-bis) |
+| Comando consulta el CF justo tras el `call` | `jc` directo, sin precaución especial |
+
 ## 8. Funciones leaf vs. no-leaf
 
 ### Función leaf
