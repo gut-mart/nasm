@@ -15,7 +15,13 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Instalar dependencias
-        run: sudo apt-get update && sudo apt-get install -y nasm make gcc
+        run: sudo apt-get update && sudo apt-get install -y nasm make binutils
+
+      - name: Verificar herramientas
+        run: |
+          nasm --version
+          ld --version
+          make --version
 
       - name: Ejecutar tests
         run: make test
