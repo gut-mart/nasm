@@ -52,6 +52,9 @@ devolver un valor incorrecto. Nunca verás un número "inventado".
 Requieren acceso a `/dev/fb0` (con `sudo` o perteneciendo al grupo `video`) y
 una TTY sin entorno gráfico.
 
+> **Nota:** para usar `sudo` sin especificar la ruta completa, el PATH de sudo
+> debe incluir `~/bin`. Ver `install-setup` en el Makefile.
+
 ### fb_core
 
 Muestra el diagnóstico del framebuffer: resolución, profundidad de color y
@@ -65,36 +68,42 @@ sudo ./bin/fb_core          # diagnóstico completo
 
 ### draw_pixel
 
-Dibuja un píxel en la posición (X, Y) del color indicado.
+Dibuja un píxel en la posición (X, Y) del color indicado. Acepta coordenadas
+fuera de pantalla — si el píxel queda fuera simplemente se ignora (exit 0).
 
 ```bash
-sudo ./bin/draw_pixel 960 540 0xFF0000    # píxel rojo en el centro
+sudo ~/bin/draw_pixel 960 540 0xFF0000    # píxel rojo en el centro
+sudo ~/bin/draw_pixel -10 -10 0xFF0000   # fuera de pantalla, ignorado
 ```
 
 ### draw_rect
 
-Dibuja un rectángulo sólido. Recorta automáticamente la parte que se salga de
-la pantalla (clipping), así que acepta coordenadas negativas.
+Dibuja un rectángulo sólido. Recorta automáticamente (clipping) la parte que
+quede fuera de pantalla. Si queda totalmente fuera, se ignora (exit 0).
 
 ```bash
-sudo ./bin/draw_rect 0 0 1920 1080 0xFF0000     # pantalla completa en rojo
-sudo ./bin/draw_rect -50 -50 200 200 0x00FF00   # recortado en la esquina
+sudo ~/bin/draw_rect 0 0 1280 800 0xFF0000      # pantalla completa en rojo
+sudo ~/bin/draw_rect -50 -50 200 200 0x00FF00   # recortado en la esquina
 ```
 
 ### draw_line
 
-Dibuja una línea entre dos puntos. Recorta las partes fuera de pantalla.
+Dibuja una línea entre dos puntos con clipping Cohen-Sutherland. Si queda
+totalmente fuera de pantalla, se ignora (exit 0).
 
 ```bash
-sudo ./bin/draw_line 0 0 1919 1079 0xFFFFFF     # diagonal blanca
+sudo ~/bin/draw_line 0 0 1279 799 0xFFFFFF       # diagonal blanca
+sudo ~/bin/draw_line -100 -100 500 500 0xFF0000  # recortada en la esquina
 ```
 
 ### draw_circle
 
-Dibuja un círculo dado su centro y radio.
+Dibuja un círculo dado su centro y radio con clipping. El centro puede estar
+fuera de pantalla. Si queda totalmente fuera, se ignora (exit 0).
 
 ```bash
-sudo ./bin/draw_circle 960 540 200 0x00FFFF     # círculo cian centrado
+sudo ~/bin/draw_circle 640 400 200 0x00FFFF   # círculo cian centrado
+sudo ~/bin/draw_circle 0 0 300 0xFF0000       # recortado en la esquina
 ```
 
 ### screenshot
@@ -236,3 +245,6 @@ Todos los comandos siguen la misma convención:
 
 Esto permite encadenar comandos en scripts de bash y comprobar `$?` para
 detectar fallos.
+
+
+

@@ -187,7 +187,8 @@ Todas con patrón fast/cval. ABI común: `RDI=ScreenInfo`, luego coordenadas.
 | line | `lib_draw_linecval` | `lib_draw_linefast` | ESI=X1, EDX=Y1, ECX=X2, R8D=Y2, R9D=color |
 | circle | `lib_draw_circlecval` | `lib_draw_circlefast` | ESI=Xc, EDX=Yc, ECX=radio, R8D=color |
 
-Los `cval` hacen clipping y devuelven CF=1 si la figura queda totalmente fuera.
+Los `cval` hacen clipping. CF=1 si la figura queda totalmente fuera (el llamante
+puede ignorarlo — los comandos de usuario lo tratan como exit 0, no como error).
 Los `fast` asumen coordenadas válidas. **Nota:** todas asumen bpp=32.
 
 ### lib_bmp_write — framebuffer → BMP
@@ -244,3 +245,6 @@ lib_cursor_hide: oculta el cursor del terminal (ANSI ESC[?25l).
 lib_cursor_show: lo restaura (ANSI ESC[?25h).
 lib_wait_key:    espera una pulsación de tecla en modo raw (TCGETS/TCSETS).
 ```
+
+
+

@@ -311,3 +311,35 @@ exigir mantener ambos manuales al crear comandos o librerías nuevas.
 - `MANUAL_USUARIO.md`
 - `MANUAL_PROGRAMADOR.md`
 - `NORMAS_PRUEBAS.md` (flujo y checklist actualizados)
+
+
+
+
+---
+
+### Eliminar `--tics` de comandos gráficos e igualar comportamiento de coordenadas
+
+**Resuelto:** 2026-06-07
+
+**Descripción:**
+Los cuatro comandos gráficos (`draw_pixel`, `draw_rect`, `draw_line`,
+`draw_circle`) tenían el flag `--tics` para medir ciclos de CPU, mezclando
+la responsabilidad de dibujar con la de medir. Además, `draw_pixel` era el
+único que devolvía error (exit 1) cuando las coordenadas quedaban fuera de
+pantalla, siendo inconsistente con los otros tres que hacen clipping.
+
+**Solución aplicada:**
+Eliminado `--tics` de los cuatro comandos. Para medir ciclos usar `bench_rect`
+o futuros comandos de `comandos/chrono/`. Unificado el comportamiento de
+coordenadas fuera de pantalla: todos devuelven exit 0 (ignorado silenciosamente)
+cuando la figura queda fuera, igual que hace el clipping parcial. El error exit 1
+solo se da para argumentos malformados o fallo de framebuffer.
+
+Configurado `/etc/sudoers.d/nasm_path` en el Tecra para que `sudo` encuentre
+los binarios en `~/bin` sin necesidad de especificar la ruta completa.
+
+**Ubicación:**
+- `comandos/monitor/draw_pixel/draw_pixel.asm`
+- `comandos/monitor/draw_rect/draw_rect.asm`
+- `comandos/monitor/draw_line/draw_line.asm`
+- `comandos/monitor/draw_circle/draw_circle.asm`

@@ -121,10 +121,10 @@ numéricos en decimal, hexadecimal (`0x...`), binario (`0b...`) y octal (`0o...`
 | Comando | Descripción |
 |---|---|
 | `fb_core` | Diagnóstico del framebuffer (resolución, bpp, offsets de color). |
-| `draw_pixel` | Dibuja un píxel en (X, Y) del color indicado. |
-| `draw_rect` | Dibuja un rectángulo sólido con clipping inteligente. |
-| `draw_line` | Dibuja una línea entre dos puntos con clipping Cohen-Sutherland. |
-| `draw_circle` | Dibuja un círculo con algoritmo de punto medio. |
+| `draw_pixel` | Dibuja un píxel en (X, Y). Coordenadas fuera de pantalla se ignoran. |
+| `draw_rect` | Dibuja un rectángulo sólido. Clipping automático si sale de pantalla. |
+| `draw_line` | Dibuja una línea entre dos puntos. Clipping Cohen-Sutherland. |
+| `draw_circle` | Dibuja un círculo con algoritmo de punto medio. Clipping automático. |
 | `screenshot` | Captura el framebuffer y lo guarda como archivo BMP. |
 
 ### Benchmarking (`comandos/chrono/`)
@@ -203,3 +203,6 @@ El proyecto compila siempre con símbolos DWARF (`-g -F dwarf` en NASM).
 ## Licencia
 
 [MIT](LICENSE) © 2026 gut-mart
+
+
+
