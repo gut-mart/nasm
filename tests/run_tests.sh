@@ -252,6 +252,36 @@ test_unit_binary() {
 }
 
 # ==============================================================================
+# ==============================================================================
+# FUNCIÓN: test_command_rejects_error
+# Verifica que un comando devuelve exit != 0 con argumentos que producen
+# un error lógico (ej: division por cero, overflow, rango inválido).
+# Diferente de test_command_rejects_garbage: los args son válidos numéricamente
+# pero la operación no es representable.
+# ==============================================================================
+test_command_rejects_error() {
+    local CMD_NAME="$1"
+    shift
+    local ARGS=("$@")
+    local DESC="$CMD_NAME rechaza error lógico (${ARGS[*]})"
+    local BIN="$PROJECT_ROOT/bin/$CMD_NAME"
+
+    if [ ! -x "$BIN" ]; then
+        assert_fail "$DESC" "binario no existe"
+        return
+    fi
+
+    "$BIN" "${ARGS[@]}" > /dev/null 2>&1
+    local EXIT_CODE=$?
+
+    if [ $EXIT_CODE -ne 0 ]; then
+        assert_pass "$DESC"
+    else
+        assert_fail "$DESC" "devolvió 0 con args ${ARGS[*]} (debería dar error lógico)"
+    fi
+}
+
+
 # EJECUCIÓN DE TESTS
 # ==============================================================================
 
@@ -269,9 +299,14 @@ test_file_exists "CONTRIBUTING.md"
 test_file_exists "setup.sh"
 test_file_exists "config.example.mk"
 test_file_exists "monitor_comandos.sh"
+test_file_exists "NORMAS_LIBRERIAS.md"
+test_file_exists "NORMAS_PRUEBAS.md"
+test_file_exists "MANUAL_USUARIO.md"
+test_file_exists "MANUAL_PROGRAMADOR.md"
 
 test_dir_exists "lib"
 test_dir_exists "lib/math/int32"
+test_dir_exists "comandos/tools/math"
 test_dir_exists "comandos"
 test_dir_exists "tests"
 
@@ -288,6 +323,15 @@ test_command_compiles "comandos/monitor/draw_line/draw_line.asm"
 test_command_compiles "comandos/monitor/draw_circle/draw_circle.asm"
 test_command_compiles "comandos/chrono/bench_rect/bench_rect.asm"
 
+# --- tools/math ---
+test_command_compiles "comandos/tools/math/abs/abs.asm"
+test_command_compiles "comandos/tools/math/min/min.asm"
+test_command_compiles "comandos/tools/math/max/max.asm"
+test_command_compiles "comandos/tools/math/clamp/clamp.asm"
+test_command_compiles "comandos/tools/math/div/div.asm"
+test_command_compiles "comandos/tools/math/mod/mod.asm"
+test_command_compiles "comandos/tools/math/pow/pow.asm"
+
 # --- Sección 3: Compilación de tests unitarios ---
 section "Compilación de tests unitarios"
 
@@ -302,6 +346,13 @@ test_command_help "draw_rect"
 test_command_help "draw_line"
 test_command_help "draw_circle"
 test_command_help "bench_rect"
+test_command_help "abs"
+test_command_help "min"
+test_command_help "max"
+test_command_help "clamp"
+test_command_help "div"
+test_command_help "mod"
+test_command_help "pow"
 
 # --- Sección 5: Comportamiento ante argumentos inválidos ---
 section "Validación de argumentos"
@@ -316,6 +367,31 @@ test_command_rejects_no_args "draw_circle"
 
 test_command_rejects_garbage "draw_pixel" "basura1" "basura2" "basura3"
 test_command_rejects_garbage "draw_rect"  "basura1" "basura2" "basura3" "basura4" "basura5"
+
+# tools/math — sin args
+test_command_rejects_no_args "abs"
+test_command_rejects_no_args "min"
+test_command_rejects_no_args "max"
+test_command_rejects_no_args "clamp"
+test_command_rejects_no_args "div"
+test_command_rejects_no_args "mod"
+test_command_rejects_no_args "pow"
+
+# tools/math — args no numéricos
+test_command_rejects_garbage "abs"   "basura"
+test_command_rejects_garbage "min"   "basura1" "basura2"
+test_command_rejects_garbage "max"   "basura1" "basura2"
+test_command_rejects_garbage "clamp" "basura1" "basura2" "basura3"
+test_command_rejects_garbage "div"   "basura1" "basura2"
+test_command_rejects_garbage "mod"   "basura1" "basura2"
+test_command_rejects_garbage "pow"   "basura1" "basura2"
+
+# tools/math — errores lógicos
+test_command_rejects_error "clamp" "5" "10" "0"       # LO > HI
+test_command_rejects_error "div"   "5" "0"             # division por cero
+test_command_rejects_error "mod"   "5" "0"             # division por cero
+test_command_rejects_error "pow"   "7" "-2"            # exp negativo
+test_command_rejects_error "pow"   "2" "31"            # overflow
 
 # --- Sección 6: Tests unitarios de librerías ---
 section "Tests unitarios de librerías"
@@ -347,3 +423,6 @@ else
     echo "================================================================"
     exit 1
 fi
+
+
+
