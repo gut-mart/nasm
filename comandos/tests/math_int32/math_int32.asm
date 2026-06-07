@@ -1,6 +1,6 @@
 ; ==============================================================================
 ; RUTA: ./comandos/tests/math_int32/math_int32.asm
-; DESCRIPCIÓN: Test unitario de lib/math/int32 (abs, min, max, clamp, div, mod).
+; DESCRIPCIÓN: Test unitario de lib/math/int32 (abs, min, max, clamp, div, mod, pow).
 ;              Prueba las capas fast y cval de cada operación.
 ;              Imprime OK/FAIL por cada caso. Devuelve exit 0 si todos pasan,
 ;              exit 1 si alguno falla. No requiere framebuffer ni sudo.
@@ -27,6 +27,8 @@ extern lib_math_div_int32fast
 extern lib_math_div_int32cval
 extern lib_math_mod_int32fast
 extern lib_math_mod_int32cval
+extern lib_math_pow_int32fast
+extern lib_math_pow_int32cval
 extern print_string, print_nl
 
 section .data
@@ -45,6 +47,8 @@ section .data
     msg_sep_div_cval   db "--- div (cval) ---", 10, 0
     msg_sep_mod_fast   db "--- mod (fast) ---", 10, 0
     msg_sep_mod_cval   db "--- mod (cval) ---", 10, 0
+    msg_sep_pow_fast   db "--- pow (fast) ---", 10, 0
+    msg_sep_pow_cval   db "--- pow (cval) ---", 10, 0
 
     ; abs fast
     t_abs_f1 db "abs( 5)        = 5", 0
@@ -112,6 +116,21 @@ section .data
     t_mod_c2 db "mod(-7, 2)     CF=0, EAX=-1", 0
     t_mod_c3 db "mod( 5, 0)     CF=1 (division por cero)", 0
     t_mod_c4 db "mod(INT32_MIN,-1) CF=1 (overflow)", 0
+
+    ; pow fast
+    t_pow_f1 db "pow( 2,10)     = 1024", 0
+    t_pow_f2 db "pow( 2, 0)     = 1", 0
+    t_pow_f3 db "pow(-2, 3)     = -8  (impar)", 0
+    t_pow_f4 db "pow(-2, 4)     = 16  (par)", 0
+    t_pow_f5 db "pow( 5, 1)     = 5", 0
+
+    ; pow cval
+    t_pow_c1 db "pow( 2,10)     CF=0, EAX=1024", 0
+    t_pow_c2 db "pow( 2, 0)     CF=0, EAX=1", 0
+    t_pow_c3 db "pow( 7,-2)     CF=1  (exp negativo no representable)", 0
+    t_pow_c4 db "pow( 0, 5)     CF=0, EAX=0", 0
+    t_pow_c5 db "pow( 2,30)     CF=0, EAX=1073741824", 0
+    t_pow_c6 db "pow( 2,31)     CF=1  (overflow)", 0
 
 section .bss
     fallos resd 1
@@ -650,6 +669,140 @@ _start:
     call .imprimir
 
     ; =========================================================================
+    ; POW FAST
+    ; =========================================================================
+    mov rdi, msg_sep_pow_fast
+    call print_string
+
+    mov edi, 2
+    mov esi, 10
+    call lib_math_pow_int32fast
+    cmp eax, 1024
+    call .registrar
+    mov rdi, t_pow_f1
+    call .imprimir
+
+    mov edi, 2
+    mov esi, 0
+    call lib_math_pow_int32fast
+    cmp eax, 1
+    call .registrar
+    mov rdi, t_pow_f2
+    call .imprimir
+
+    mov edi, -2
+    mov esi, 3
+    call lib_math_pow_int32fast
+    cmp eax, -8
+    call .registrar
+    mov rdi, t_pow_f3
+    call .imprimir
+
+    mov edi, -2
+    mov esi, 4
+    call lib_math_pow_int32fast
+    cmp eax, 16
+    call .registrar
+    mov rdi, t_pow_f4
+    call .imprimir
+
+    mov edi, 5
+    mov esi, 1
+    call lib_math_pow_int32fast
+    cmp eax, 5
+    call .registrar
+    mov rdi, t_pow_f5
+    call .imprimir
+
+    ; =========================================================================
+    ; POW CVAL
+    ; =========================================================================
+    mov rdi, msg_sep_pow_cval
+    call print_string
+
+    mov edi, 2
+    mov esi, 10
+    call lib_math_pow_int32cval
+    jc .pow_c1_fail
+    cmp eax, 1024
+    call .registrar
+    jmp .pow_c1_done
+.pow_c1_fail:
+    call .forzar_fallo
+.pow_c1_done:
+    mov rdi, t_pow_c1
+    call .imprimir
+
+    mov edi, 2
+    mov esi, 0
+    call lib_math_pow_int32cval
+    jc .pow_c2_fail
+    cmp eax, 1
+    call .registrar
+    jmp .pow_c2_done
+.pow_c2_fail:
+    call .forzar_fallo
+.pow_c2_done:
+    mov rdi, t_pow_c2
+    call .imprimir
+
+    ; exp negativo → error CF=1 (no representable como entero)
+    mov edi, 7
+    mov esi, -2
+    call lib_math_pow_int32cval
+    jnc .pow_c3_fail
+    cmp eax, 0
+    call .registrar
+    jmp .pow_c3_done
+.pow_c3_fail:
+    call .forzar_fallo
+.pow_c3_done:
+    mov rdi, t_pow_c3
+    call .imprimir
+
+    ; base 0, exp positivo → 0
+    mov edi, 0
+    mov esi, 5
+    call lib_math_pow_int32cval
+    jc .pow_c4_fail
+    cmp eax, 0
+    call .registrar
+    jmp .pow_c4_done
+.pow_c4_fail:
+    call .forzar_fallo
+.pow_c4_done:
+    mov rdi, t_pow_c4
+    call .imprimir
+
+    ; 2^30 = 1073741824, cabe justo
+    mov edi, 2
+    mov esi, 30
+    call lib_math_pow_int32cval
+    jc .pow_c5_fail
+    cmp eax, 1073741824
+    call .registrar
+    jmp .pow_c5_done
+.pow_c5_fail:
+    call .forzar_fallo
+.pow_c5_done:
+    mov rdi, t_pow_c5
+    call .imprimir
+
+    ; 2^31 → overflow, CF=1
+    mov edi, 2
+    mov esi, 31
+    call lib_math_pow_int32cval
+    jnc .pow_c6_fail
+    cmp eax, 0
+    call .registrar
+    jmp .pow_c6_done
+.pow_c6_fail:
+    call .forzar_fallo
+.pow_c6_done:
+    mov rdi, t_pow_c6
+    call .imprimir
+
+    ; =========================================================================
     ; RESULTADO FINAL
     ; =========================================================================
     call print_nl
@@ -691,6 +844,9 @@ _start:
     call print_string
     call print_nl
     ret
+
+
+
 
 
 
