@@ -33,7 +33,7 @@ lib/             Librerías NASM reutilizables (se empaquetan en libcore.a)
   graph/         Gráficos: framebuffer, color, dibujado
   io/            Entrada/salida básica
   math/          Matemáticas enteras
-    int32/       abs, min, max, clamp, div, mod — capas fast + cval por operación
+    int32/       abs, min, max, clamp, div, mod, pow — capas fast + cval
   chrono/        Medición de ciclos de CPU (RDTSC/RDTSCP)
 comandos/        Programas ejecutables que usan las librerías
   monitor/       Comandos relacionados con el framebuffer
@@ -53,6 +53,13 @@ Dos documentos definen las reglas que se siguen siempre:
   preservación de CF al delegar de cval a fast.
 - [NORMAS_PRUEBAS.md](NORMAS_PRUEBAS.md) — flujo de trabajo, criterios de test
   y checklist antes de cada commit.
+
+Además, dos manuales centralizados documentan el uso:
+
+- [MANUAL_USUARIO.md](MANUAL_USUARIO.md) — todos los comandos para el usuario
+  final: qué hacen, ejemplos, dominio y rango de cada operación.
+- [MANUAL_PROGRAMADOR.md](MANUAL_PROGRAMADOR.md) — la API de las librerías para
+  usarlas desde NASM: ABI, contrato CF y qué capa (fast/cval) llamar.
 
 ## Patrón de capas de las librerías
 
@@ -128,9 +135,9 @@ numéricos en decimal, hexadecimal (`0x...`), binario (`0b...`) y octal (`0o...`
 
 ### Herramientas matemáticas (`comandos/tools/math/`)
 
-Calculadora de operaciones enteras desde CLI. Útil durante el desarrollo
-para verificar cálculos sin salir del terminal. Todos aceptan `-h` y soportan
-múltiples bases numéricas.
+Calculadora de operaciones enteras desde CLI. Todos aceptan `-h` y soportan
+múltiples bases numéricas. El detalle de dominio y rango está en
+[MANUAL_USUARIO.md](MANUAL_USUARIO.md).
 
 | Comando | Uso | Descripción |
 |---|---|---|
@@ -140,6 +147,7 @@ múltiples bases numéricas.
 | `clamp` | `clamp VAL LO HI` | Limita VAL al rango [LO, HI]. |
 | `div` | `div DIVIDENDO DIVISOR` | División entera (trunca hacia cero). |
 | `mod` | `mod DIVIDENDO DIVISOR` | Resto de división (signo del dividendo). |
+| `pow` | `pow BASE EXP` | Potencia entera (exp ≥ 0, square-and-multiply). |
 
 ```bash
 ./bin/abs -42          # → 42
@@ -148,8 +156,8 @@ múltiples bases numéricas.
 ./bin/clamp 15 0 10    # → 10
 ./bin/div -7 2         # → -3
 ./bin/mod -7 2         # → -1
-./bin/div 5 0          # → Error: division por cero
-./bin/clamp 5 10 0     # → Error: rango invalido (LO > HI)
+./bin/pow 2 10         # → 1024
+./bin/pow 2 31         # → Error: overflow
 ```
 
 ## Targets del Makefile
@@ -171,12 +179,9 @@ La suite de tests (`make test`) no requiere framebuffer ni sudo. Compila todos
 los comandos, verifica que responden a `-h` y rechazan argumentos inválidos, y
 ejecuta los tests unitarios de las librerías.
 
-Los tests unitarios viven en `comandos/tests/` y son binarios autónomos que
-imprimen `OK/FAIL` por caso e informan su resultado vía exit code.
-
 ```bash
 make test              # Suite completa
-./bin/math_int32       # Solo tests de lib/math/int32 (41 casos: fast + cval)
+./bin/math_int32       # Solo tests de lib/math/int32 (54 casos: fast + cval)
 ```
 
 ## Depuración

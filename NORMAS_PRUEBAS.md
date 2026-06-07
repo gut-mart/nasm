@@ -15,7 +15,7 @@ Cada vez que se crea o modifica código, se sigue este orden sin excepciones:
 1. Librería       → crear/modificar en lib/
 2. Comando        → crear/modificar en comandos/
 3. Pruebas        → compilar y probar manualmente
-4. README + TODO  → actualizar ambos
+4. Docs           → README, TODO, MANUAL_USUARIO y MANUAL_PROGRAMADOR
 5. Commits        → uno por responsabilidad
 6. Revisión       → ./empaquetar.sh → subir revision.txt
 ```
@@ -257,6 +257,11 @@ git commit ...      # commitear
 [ ] make test → todos los tests pasan
 [ ] README actualizado si hay comandos/librerías nuevos
 [ ] TODO actualizado (nueva entrada en Resuelto si procede)
+[ ] MANUAL_USUARIO.md actualizado si hay un comando nuevo
+[ ] MANUAL_PROGRAMADOR.md actualizado si hay una librería nueva
 [ ] git status → no hay archivos sin rastrear que deberían estar
 [ ] ./empaquetar.sh → revision.txt generado
 ```
+
+
+
