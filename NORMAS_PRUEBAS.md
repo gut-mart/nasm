@@ -98,16 +98,34 @@ Verificar al menos dos:
 
 ## 4. Pruebas en el Tecra M10 (hardware real)
 
-Los comandos que usan `/dev/fb0` deben probarse en el Tecra M10.
-El flujo es:
+### Instalar un comando nuevo
+
+Cuando creas o modificas un único comando, instala solo ese:
 
 ```bash
-# En el equipo de desarrollo
-make deploy SRC=<ruta/al/comando.asm>
+# En el equipo de desarrollo — compila e instala solo el nuevo comando
+make install SRC=<ruta/al/comando.asm>
 
 # En el Tecra (por SSH o directamente)
-sudo ./<comando> <args>
+<comando> <args>
 ```
+
+### Instalar todos los comandos (`make install-all`)
+
+Solo en estos casos, cuando realmente hace falta reinstalar todo:
+
+- Clone fresco en un equipo nuevo.
+- Se ha modificado algo en `lib/` que afecta a todos los binarios.
+- Se quiere asegurar que el Tecra tiene exactamente la versión actual de todo.
+
+```bash
+make install-all
+```
+
+**No usar `make install-all` por defecto al crear un comando nuevo.** Es lento
+(recompila desde cero) e innecesario cuando solo ha cambiado una cosa.
+
+### Qué necesita el Tecra vs. qué no
 
 Los comandos `tools/math` no necesitan framebuffer y se pueden probar
 en local. Solo los comandos de `monitor/` y `chrono/` requieren el Tecra.
@@ -258,7 +276,8 @@ git commit ...      # commitear
 [ ] README actualizado si hay comandos/librerías nuevos
 [ ] TODO actualizado (nueva entrada en Resuelto si procede)
 [ ] MANUAL_USUARIO.md actualizado si hay un comando nuevo
-[ ] MANUAL_PROGRAMADOR.md actualizado si hay una librería nueva
+[ ] MANUAL_PROGRAMADOR.md actualizado si hay una libreria nueva
+[ ] make install SRC=<ruta> (no install-all salvo cambios en lib/)
 [ ] git status → no hay archivos sin rastrear que deberían estar
 [ ] ./empaquetar.sh → revision.txt generado
 ```
