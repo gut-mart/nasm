@@ -259,3 +259,55 @@ bits. Corregido con `movsxd rdi, eax` en los seis comandos. Documentado en
 - `lib/math/int32/lib_math_div_int32cval.asm`
 - `lib/math/int32/lib_math_mod_int32cval.asm`
 - `comandos/tools/math/{abs,min,max,clamp,div,mod}/*.asm`
+
+---
+
+### `lib/math/int32` — pow con square-and-multiply
+
+**Resuelto:** 2026-06-07
+
+**Descripción:**
+Potencia entera con signo: base^exp.
+
+**Solución aplicada:**
+`fast` usa exponenciación binaria (square-and-multiply), O(log exp). `cval`
+valida en 64 bits tras cada multiplicación que el valor sigue cabiendo en int32,
+y devuelve CF=1 si desborda. El exponente negativo se trata como error (CF=1):
+x^(-n) sería una fracción no representable como entero, decisión coherente con
+abs(INT32_MIN) y div(x,0) — cuando el resultado correcto no cabe en int32, se
+señaliza, no se inventa un valor. Casos válidos: pow(x,0)=1, pow(0,n>0)=0.
+Test ampliado a 54 casos. Comando `pow` en `comandos/tools/math/`. Probado en
+Tecra M10.
+
+**Ubicación:**
+- `lib/math/int32/lib_math_pow_int32fast.asm`
+- `lib/math/int32/lib_math_pow_int32cval.asm`
+- `comandos/tools/math/pow/pow.asm`
+
+---
+
+### Manuales centralizados de usuario y programador
+
+**Resuelto:** 2026-06-07
+
+**Descripción:**
+Faltaba documentación de uso orientada a las dos audiencias del proyecto: quien
+ejecuta los comandos desde la terminal, y quien usa las librerías desde NASM.
+
+**Solución aplicada:**
+Dos manuales centralizados (uno por audiencia, no un archivo por comando, para
+evitar la desincronización de decenas de ficheros):
+
+- `MANUAL_USUARIO.md` — todos los comandos, con ejemplos, dominio y rango. Incluye
+  una sección sobre la amplitud de los enteros de 32 bits y por qué ciertos
+  casos límite dan error.
+- `MANUAL_PROGRAMADOR.md` — la API de cada librería: ABI, contrato CF, qué capa
+  fast/cval llamar, y ejemplos de integración.
+
+El flujo de trabajo y el checklist de `NORMAS_PRUEBAS.md` se actualizaron para
+exigir mantener ambos manuales al crear comandos o librerías nuevas.
+
+**Ubicación:**
+- `MANUAL_USUARIO.md`
+- `MANUAL_PROGRAMADOR.md`
+- `NORMAS_PRUEBAS.md` (flujo y checklist actualizados)
