@@ -9,8 +9,9 @@
 #   make help
 #
 # USO REMOTO (requiere config.local.mk):
-#   make deploy  SRC=comandos/monitor/draw_pixel/draw_pixel.asm
-#   make install SRC=comandos/monitor/draw_pixel/draw_pixel.asm
+#   make deploy      SRC=comandos/monitor/draw_pixel/draw_pixel.asm
+#   make install     SRC=comandos/monitor/draw_pixel/draw_pixel.asm
+#   make install-all                  ← instala todos los comandos de una vez
 #
 # Para activar deploy/install, copia config.example.mk a config.local.mk
 # y rellénalo con tus datos.
@@ -45,10 +46,28 @@ LIB_DEPS = $(LIB_OBJS:.o=.d)
 # Se puede sobreescribir en config.local.mk: INSTALL_DIR = /otra/ruta
 INSTALL_DIR ?= $(REMOTE_DIR)/bin
 
+# Lista completa de comandos para make install-all
+# Añadir aquí cada nuevo comando que deba instalarse en el Tecra.
+TODOS_COMANDOS = \
+	comandos/monitor/core/fb_core.asm \
+	comandos/monitor/draw_pixel/draw_pixel.asm \
+	comandos/monitor/draw_rect/draw_rect.asm \
+	comandos/monitor/draw_line/draw_line.asm \
+	comandos/monitor/draw_circle/draw_circle.asm \
+	comandos/monitor/screenshot/screenshot.asm \
+	comandos/chrono/bench_rect/bench_rect.asm \
+	comandos/tools/math/abs/abs.asm \
+	comandos/tools/math/min/min.asm \
+	comandos/tools/math/max/max.asm \
+	comandos/tools/math/clamp/clamp.asm \
+	comandos/tools/math/div/div.asm \
+	comandos/tools/math/mod/mod.asm \
+	comandos/tools/math/pow/pow.asm
+
 # Flags de NASM: -g (debug), -F dwarf (formato para GDB y VS Code)
 NASMFLAGS = -f elf64 -g -F dwarf
 
-.PHONY: all clean clean-all test help run deploy install info
+.PHONY: all clean clean-all test help run deploy install install-all install-setup info
 
 all: $(EXEC)
 
@@ -118,9 +137,9 @@ deploy: $(EXEC)
 	@echo "🎯 Equipo remoto en espera. Pulsa F5 en VS Code para comenzar."
 	@echo "   Para ejecutar sin depurador: sudo $(REMOTE_DIR)/fb_run.sh $(REMOTE_DIR)/$(BASENAME)"
 
-# Instala el binario en ~/bin del equipo remoto para usarlo como comando del sistema.
+# Instala un comando concreto en ~/bin del equipo remoto.
 # Requiere config.local.mk con PC_DESTINO y REMOTE_DIR definidos.
-# Primera vez: ejecutar 'make install-setup' para preparar ~/bin en el Tecra.
+# Uso: make install SRC=comandos/tools/math/abs/abs.asm
 install: $(EXEC)
 	@if [ -z "$(PC_DESTINO)" ] || [ "$(PC_DESTINO)" = "mi_equipo_remoto" ]; then \
 		echo "❌ Error: PC_DESTINO no está configurado."; \
@@ -138,6 +157,35 @@ install: $(EXEC)
 	@echo ""
 	@echo "   Uso: fb_run.sh --espera $(BASENAME) [argumentos]"
 
+# Compila e instala TODOS los comandos del proyecto en ~/bin del Tecra.
+# No necesita SRC. Compila en limpio y despliega en orden.
+# Añadir nuevos comandos a la variable TODOS_COMANDOS al inicio del Makefile.
+install-all:
+	@if [ -z "$(PC_DESTINO)" ] || [ "$(PC_DESTINO)" = "mi_equipo_remoto" ]; then \
+		echo "❌ Error: PC_DESTINO no está configurado."; \
+		echo "   Copia config.example.mk a config.local.mk y rellena tus datos."; \
+		exit 1; \
+	fi
+	@echo "=== 📦 INSTALANDO TODOS LOS COMANDOS EN $(PC_DESTINO):$(INSTALL_DIR) ==="
+	@echo ""
+	@$(MAKE) clean-all
+	@ssh $(PC_DESTINO) "mkdir -p $(INSTALL_DIR)"
+	@for cmd in $(TODOS_COMANDOS); do \
+		nombre=$$(basename $$cmd .asm); \
+		echo "--- Compilando e instalando: $$nombre ---"; \
+		$(MAKE) SRC=$$cmd || exit 1; \
+		scp bin/$$nombre $(PC_DESTINO):$(INSTALL_DIR)/$$nombre || exit 1; \
+		ssh $(PC_DESTINO) "chmod +x $(INSTALL_DIR)/$$nombre"; \
+		echo "✅ $$nombre instalado."; \
+		echo ""; \
+	done
+	@scp scripts/fb_run/fb_run.sh $(PC_DESTINO):$(INSTALL_DIR)/fb_run.sh
+	@ssh $(PC_DESTINO) "chmod +x $(INSTALL_DIR)/fb_run.sh"
+	@echo "✅ fb_run.sh instalado."
+	@echo ""
+	@echo "=== ✨ Instalación completa en $(INSTALL_DIR) ==="
+	@echo "   Verifica en el Tecra: ls ~/bin/"
+
 # Prepara ~/bin en el Tecra y lo añade al PATH si no está ya.
 # Solo necesario la primera vez.
 install-setup:
@@ -148,8 +196,7 @@ install-setup:
 	@echo "--- ⚙️  CONFIGURANDO ~/bin EN $(PC_DESTINO) ---"
 	@ssh $(PC_DESTINO) "mkdir -p $(INSTALL_DIR)"
 	@ssh $(PC_DESTINO) " \
-		SHELL_RC=~/.zshrc; \
-		[ ! -f \$$SHELL_RC ] && SHELL_RC=~/.bashrc; \
+		SHELL_RC=~/.bashrc; \
 		if ! grep -q '$(INSTALL_DIR)' \$$SHELL_RC 2>/dev/null; then \
 			echo '' >> \$$SHELL_RC; \
 			echo '# NASM commands' >> \$$SHELL_RC; \
@@ -159,7 +206,7 @@ install-setup:
 			echo 'ℹ️  PATH ya contiene $(INSTALL_DIR), sin cambios.'; \
 		fi"
 	@echo "✅ Setup completado. Reinicia la sesión en el Tecra o ejecuta:"
-	@echo "   source ~/.zshrc"
+	@echo "   source ~/.bashrc"
 
 # Información sobre la configuración actual
 info:
@@ -186,13 +233,14 @@ help:
 	@echo "  make test                  Ejecuta la suite de tests"
 	@echo "  make run                   Ejecuta el binario compilado localmente"
 	@echo "  make deploy SRC=<...>      Compila y despliega en equipo remoto (*)"
-	@echo "  make install SRC=<...>     Instala en ~/bin del equipo remoto (*)"
+	@echo "  make install SRC=<...>     Instala un comando en ~/bin del Tecra (*)"
+	@echo "  make install-all           Instala todos los comandos en ~/bin (*)"
 	@echo "  make install-setup         Prepara ~/bin y PATH (solo primera vez) (*)"
 	@echo "  make info                  Muestra la configuración actual"
 	@echo "  make help                  Muestra esta ayuda"
 	@echo ""
 	@echo "Ejemplo:"
 	@echo "  make SRC=comandos/monitor/draw_pixel/draw_pixel.asm"
-	@echo "  make install SRC=comandos/monitor/draw_line/draw_line.asm"
+	@echo "  make install-all"
 	@echo ""
 	@echo "(*) requiere config.local.mk - ver config.example.mk"
