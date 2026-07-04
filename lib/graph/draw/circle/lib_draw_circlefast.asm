@@ -9,8 +9,11 @@
 ;            EDX = CY (centro Y)
 ;            ECX = Radio
 ;            R8D = Color (32 bits, ya empaquetado para el hardware)
-;   Salida:  Sin valor de retorno. CF no modificado intencionadamente.
-; NOTA: Asume bpp=32. Ver TODO.md.
+;   Salida:  Sin valor de retorno.
+; NOTA: Este fast SÍ altera CF (cmp del algoritmo de punto medio). La capa
+;       cval debe delegar con opción B: call + clc + ret (NORMAS sección 7).
+; SOPORTE bpp: hereda el de lib_draw_pixelfast (16/24/32 bpp) a través de
+;       lib_draw_pixelcval, a quien delega la escritura de cada píxel.
 ;
 ; GESTIÓN DE REGISTROS:
 ;   lib_draw_pixelcval destruye todos los caller-saved. Por eso:

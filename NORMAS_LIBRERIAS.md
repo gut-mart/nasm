@@ -273,15 +273,21 @@ que `fast` no toca CF.
 ### Ejemplos reales del proyecto
 
 ```nasm
-; lib_draw_pixelcval — fast usa mov/imul/add/shr, NO toca CF → opción A válida
-clc
-jmp lib_draw_pixelfast
-
 ; lib_math_min_int32cval — fast usa cmp → DEBE usar opción B
 call lib_math_min_int32fast
 clc
 ret
+
+; lib_string_int32cval — variante segura del tail-call: el propio fast
+; termina en clc + ret, así que el CF final lo garantiza fast, no el cval
+jmp lib_string_int32fast
 ```
+
+Nota histórica: `lib_draw_pixelcval` fue el ejemplo canónico de la opción A
+(su `fast` solo usaba mov/imul/add/shr). Desde el soporte de bpp variable
+(2026-07), `lib_draw_pixelfast` usa `cmp` para el despacho por profundidad y
+su `cval` pasó a la opción B. **Ningún `cval` del proyecto usa ya la opción A
+pura**; sigue documentada porque la regla general se mantiene.
 
 ### Por qué importa
 
@@ -463,29 +469,29 @@ archivo sin la extensión:
 
 | Archivo | Capa | fast toca CF | Delegación |
 |---|---|---|---|
-| `lib_draw_pixelcval.asm` | cval | No | Opción A (jmp) |
+| `lib_draw_pixelcval.asm` | cval | Sí (cmp del despacho por bpp) | Opción B |
 | `lib_draw_pixelfast.asm` | fast | — | — |
 
 ### `lib/graph/draw/rect/`
 
-| Archivo | Capa |
-|---|---|
-| `lib_draw_rectcval.asm` | cval |
-| `lib_draw_rectfast.asm` | fast |
+| Archivo | Capa | fast toca CF | Delegación |
+|---|---|---|---|
+| `lib_draw_rectcval.asm` | cval | Sí (cmp/add/sub) | Opción B |
+| `lib_draw_rectfast.asm` | fast | — | — |
 
 ### `lib/graph/draw/line/`
 
-| Archivo | Capa |
-|---|---|
-| `lib_draw_linecval.asm` | cval |
-| `lib_draw_linefast.asm` | fast |
+| Archivo | Capa | fast toca CF | Delegación |
+|---|---|---|---|
+| `lib_draw_linecval.asm` | cval | Sí (cmp/add de Bresenham) | Opción B |
+| `lib_draw_linefast.asm` | fast | — | — |
 
 ### `lib/graph/draw/circle/`
 
-| Archivo | Capa |
-|---|---|
-| `lib_draw_circlecval.asm` | cval |
-| `lib_draw_circlefast.asm` | fast |
+| Archivo | Capa | fast toca CF | Delegación |
+|---|---|---|---|
+| `lib_draw_circlecval.asm` | cval | Sí (cmp del punto medio) | Opción B |
+| `lib_draw_circlefast.asm` | fast | — | — |
 
 ### `lib/graph/bmp/`
 

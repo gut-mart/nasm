@@ -9,8 +9,11 @@
 ;            ECX = X2 (coordenada destino X)
 ;            R8D = Y2 (coordenada destino Y)
 ;            R9D = Color (32 bits, ya empaquetado para el hardware)
-;   Salida:  Sin valor de retorno. CF no modificado intencionadamente.
-; NOTA: Asume bpp=32 (4 bytes por píxel). Limitación conocida, ver TODO.md.
+;   Salida:  Sin valor de retorno.
+; NOTA: Este fast SÍ altera CF (cmp/add de Bresenham). La capa cval debe
+;       delegar con opción B: call + clc + ret (NORMAS sección 7).
+; SOPORTE bpp: hereda el de lib_draw_pixelfast (16/24/32 bpp), a quien
+;       delega la escritura de cada píxel.
 ; CORRECCIÓN: X2 e Y2 se guardan en registros callee-saved (R12D, R13D) desde
 ;             el inicio, evitando que ECX y R8D sean destruidos durante la
 ;             llamada a lib_draw_pixelfast dentro del bucle.
