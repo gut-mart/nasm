@@ -336,6 +336,7 @@ test_command_compiles "comandos/tools/math/pow/pow.asm"
 section "Compilación de tests unitarios"
 
 test_command_compiles "comandos/tests/math_int32/math_int32.asm"
+test_command_compiles "comandos/tests/string_int32/string_int32.asm"
 
 # --- Sección 4: Comportamiento ante -h (ayuda) ---
 section "Respuesta a -h (ayuda)"
@@ -393,10 +394,18 @@ test_command_rejects_error "mod"   "5" "0"             # division por cero
 test_command_rejects_error "pow"   "7" "-2"            # exp negativo
 test_command_rejects_error "pow"   "2" "31"            # overflow
 
+# parser — valores que no caben en el rango (validación por valor)
+test_command_rejects_error "abs" "2147483648"          # decimal > INT32_MAX
+test_command_rejects_error "abs" "4294967295"          # decimal > INT32_MAX
+test_command_rejects_error "abs" "5000000000"          # no cabe en 32 bits
+test_command_rejects_error "abs" "0o77777777777"       # octal > 32 bits
+test_command_rejects_error "abs" "-2147483649"         # magnitud > |INT32_MIN|
+
 # --- Sección 6: Tests unitarios de librerías ---
 section "Tests unitarios de librerías"
 
 test_unit_binary "math_int32"
+test_unit_binary "string_int32"
 
 # --- Sección 7: Targets del Makefile ---
 section "Targets del Makefile"
