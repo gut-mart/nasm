@@ -337,6 +337,7 @@ section "Compilación de tests unitarios"
 
 test_command_compiles "comandos/tests/math_int32/math_int32.asm"
 test_command_compiles "comandos/tests/string_int32/string_int32.asm"
+test_command_compiles "comandos/tests/draw_bpp/draw_bpp.asm"
 
 # --- Sección 4: Comportamiento ante -h (ayuda) ---
 section "Respuesta a -h (ayuda)"
@@ -406,6 +407,7 @@ section "Tests unitarios de librerías"
 
 test_unit_binary "math_int32"
 test_unit_binary "string_int32"
+test_unit_binary "draw_bpp"
 
 # --- Sección 7: Targets del Makefile ---
 section "Targets del Makefile"
