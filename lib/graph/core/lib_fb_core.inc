@@ -10,8 +10,12 @@ struc ScreenInfo
     .green_off   resd 1  ; Offset 32
     .blue_off    resd 1  ; Offset 36
     .transp_off  resd 1  ; Offset 40
-    .padding     resd 1  ; <--- NUEVO: Offset 44 (Alineación para 64 bits)
-    .ptr_mem     resq 1  ; <--- CORREGIDO: Offset 48 (Múltiplo de 8)
+    .red_len     resd 1  ; Offset 44 — bits del canal (5/6/8 según modo)
+    .green_len   resd 1  ; Offset 48
+    .blue_len    resd 1  ; Offset 52
+    .transp_len  resd 1  ; Offset 56
+    .padding     resd 1  ; Offset 60 (alineación de ptr_mem a 8 bytes)
+    .ptr_mem     resq 1  ; Offset 64 (múltiplo de 8)
 endstruc
 
-%define ScreenInfo_size 56  ; <--- CORREGIDO: Tamaño total
+%define ScreenInfo_size 72

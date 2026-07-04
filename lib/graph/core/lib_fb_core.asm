@@ -108,6 +108,17 @@ fb_core:
     mov eax, dword [fb_var_info + 68]
     mov dword [r12 + ScreenInfo.transp_off], eax
 
+    ; Longitudes de canal (fb_bitfield.length, a +4 de cada offset).
+    ; Necesarias para empaquetar color en modos con canales < 8 bits (RGB565).
+    mov eax, dword [fb_var_info + 36]
+    mov dword [r12 + ScreenInfo.red_len], eax
+    mov eax, dword [fb_var_info + 48]
+    mov dword [r12 + ScreenInfo.green_len], eax
+    mov eax, dword [fb_var_info + 60]
+    mov dword [r12 + ScreenInfo.blue_len], eax
+    mov eax, dword [fb_var_info + 72]
+    mov dword [r12 + ScreenInfo.transp_len], eax
+
     sys_close rbx
     mov rax, 0
     jmp .fin

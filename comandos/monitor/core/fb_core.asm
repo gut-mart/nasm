@@ -37,6 +37,9 @@ section .data
     p_rojo      db "OFFSET_R=", 0
     p_verde     db "OFFSET_G=", 0
     p_azul      db "OFFSET_B=", 0
+    p_rojo_len  db "LEN_R=", 0
+    p_verde_len db "LEN_G=", 0
+    p_azul_len  db "LEN_B=", 0
 
     ; --- TEXTOS MODO HUMANO ---
     msg_titulo  db "=== DIAGNOSTICO MOTOR GRAFICO (COMPLETO) ===", 0
@@ -49,10 +52,12 @@ section .data
     msg_bytes   db " bytes", 0
     msg_ptr     db "Puntero Memoria: ", 0
     
-    msg_color   db "--- Offsets de Color ---", 0
+    msg_color   db "--- Canales de Color (offset, longitud) ---", 0
     msg_r       db "  Rojo:  ", 0
     msg_g       db "  Verde: ", 0
     msg_b       db "  Azul:  ", 0
+    msg_par     db " (", 0
+    msg_par_fin db " bits)", 0
     
     msg_error   db "Error: Permiso denegado al leer /dev/fb0. Ejecuta con 'sudo'.", 0
 
@@ -165,7 +170,25 @@ modo_parseable:
     mov edi, dword [datos_fb + ScreenInfo.blue_off]
     call print_int
     call print_nl
-    
+
+    mov rdi, p_rojo_len
+    call print_string
+    mov edi, dword [datos_fb + ScreenInfo.red_len]
+    call print_int
+    call print_nl
+
+    mov rdi, p_verde_len
+    call print_string
+    mov edi, dword [datos_fb + ScreenInfo.green_len]
+    call print_int
+    call print_nl
+
+    mov rdi, p_azul_len
+    call print_string
+    mov edi, dword [datos_fb + ScreenInfo.blue_len]
+    call print_int
+    call print_nl
+
     jmp fin_programa
 
 modo_humano:
@@ -232,21 +255,39 @@ modo_humano:
     call print_string
     mov edi, dword [datos_fb + ScreenInfo.red_off]
     call print_int
+    mov rdi, msg_par
+    call print_string
+    mov edi, dword [datos_fb + ScreenInfo.red_len]
+    call print_int
+    mov rdi, msg_par_fin
+    call print_string
     call print_nl
 
     mov rdi, msg_g
     call print_string
     mov edi, dword [datos_fb + ScreenInfo.green_off]
     call print_int
+    mov rdi, msg_par
+    call print_string
+    mov edi, dword [datos_fb + ScreenInfo.green_len]
+    call print_int
+    mov rdi, msg_par_fin
+    call print_string
     call print_nl
 
     mov rdi, msg_b
     call print_string
     mov edi, dword [datos_fb + ScreenInfo.blue_off]
     call print_int
+    mov rdi, msg_par
+    call print_string
+    mov edi, dword [datos_fb + ScreenInfo.blue_len]
+    call print_int
+    mov rdi, msg_par_fin
+    call print_string
     call print_nl
     call print_nl
-    
+
     jmp fin_programa
 
 error_grafico:
