@@ -149,7 +149,15 @@ y comprobarías el CF con `jc .error`.
 | `lib_string_int32fast` | RDI=cadena ya validada | EAX=valor | nunca (asume válida) |
 
 Acepta prefijos `0x`, `0b`, `0o`, `0d` y signo negativo. El `cval` valida los
-caracteres y detecta overflow contando dígitos según la base.
+caracteres y detecta overflow **por valor**: acumula en 64 bits durante la
+validación y comprueba tras cada dígito que no se supera el tope. Los ceros a
+la izquierda no cuentan para el rango. Topes según base y signo:
+
+| Entrada | Tope | Racional |
+|---|---|---|
+| Decimal sin signo | `2147483647` (INT32_MAX) | Un decimal es una cantidad con signo |
+| Hex/bin/oct sin signo | `0xFFFFFFFF` | Patrón de bits de 32 bits (colores, máscaras); `0xFFFFFFFF` = -1 |
+| Con signo `-` (cualquier base) | magnitud `2147483648` (\|INT32_MIN\|) | El resultado debe ser representable en int32 |
 
 ### lib_uint32_string — uint32 → string
 

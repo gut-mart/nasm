@@ -21,6 +21,21 @@ libremente en un mismo comando.
 | Binario | `0b` | `0b1010` | 10 |
 | Octal | `0o` | `0o17` | 15 |
 
+### Rangos aceptados según la base
+
+El número debe caber en 32 bits; si no cabe, el comando devuelve error en vez
+de truncarlo. Las reglas exactas dependen de cómo se escribe:
+
+- **Decimal sin signo** — de `0` a `2147483647` (INT32_MAX). Un decimal se
+  interpreta como cantidad con signo: `4294967295` es error, no -1.
+- **Hex, binario u octal sin signo** — hasta `0xFFFFFFFF`. Las bases con
+  prefijo son **patrones de bits** de 32 bits (útiles para colores y
+  máscaras), y se interpretan como int32: `0xFFFFFFFF` equivale a -1.
+- **Con signo `-` (cualquier base)** — magnitud hasta `2147483648`
+  (\|INT32_MIN\|): `-2147483648` es válido, `-2147483649` es error.
+
+Los ceros a la izquierda no cuentan para el rango: `0x00000000FF` vale 255.
+
 ---
 
 ## Amplitud: el dominio de los enteros de 32 bits

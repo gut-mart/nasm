@@ -343,3 +343,37 @@ los binarios en `~/bin` sin necesidad de especificar la ruta completa.
 - `comandos/monitor/draw_rect/draw_rect.asm`
 - `comandos/monitor/draw_line/draw_line.asm`
 - `comandos/monitor/draw_circle/draw_circle.asm`
+
+---
+
+### Hueco en la detección de overflow de `lib_string_int32cval`
+
+**Resuelto:** 2026-07-04
+
+**Descripción:**
+La validación de overflow del parser contaba dígitos (decimal ≤ 10,
+octal ≤ 11...) en lugar de comprobar el valor. El conteo rechazaba cadenas
+demasiado largas, pero aceptaba valores que cabían en el conteo y no en
+32 bits: `abs 5000000000` devolvía 705032704 (truncado), `abs 4294967295`
+devolvía 1 (envolvía a -1) y `abs 0o77777777777` devolvía 1, todos con
+exit 0. Violaba la regla del proyecto de nunca inventar un valor.
+
+**Solución aplicada:**
+Validación por valor: el `cval` acumula el número en 64 bits dentro de los
+mismos bucles que validan caracteres, y tras cada dígito comprueba que no se
+supera el tope (mismo enfoque que la validación de `lib_math_pow_int32cval`).
+Regla de tres topes: decimal sin signo ≤ INT32_MAX (una cantidad con signo);
+hex/bin/oct sin signo ≤ 0xFFFFFFFF (patrones de bits para colores y máscaras,
+`0xFFFFFFFF` = -1); con signo `-` magnitud ≤ |INT32_MIN| en cualquier base.
+Mejoras laterales: los ceros a la izquierda ya no cuentan para el rango
+(`0x00000000FF` = 255 antes se rechazaba), y `0d` sin dígitos ahora es error
+(antes se aceptaba como 0, inconsistente con `0x`).
+
+Test unitario nuevo `string_int32` (26 casos: fast + cval) y 5 casos de error
+lógico de rango añadidos a `run_tests.sh`. Suite total: 78 tests.
+
+**Ubicación:**
+- `lib/cnv/string_int32/lib_string_int32cval.asm`
+- `comandos/tests/string_int32/string_int32.asm`
+- `tests/run_tests.sh`
+- `MANUAL_USUARIO.md`, `MANUAL_PROGRAMADOR.md` (rangos documentados)

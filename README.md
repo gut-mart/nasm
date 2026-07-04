@@ -179,6 +179,7 @@ ejecuta los tests unitarios de las librerías.
 ```bash
 make test              # Suite completa
 ./bin/math_int32       # Solo tests de lib/math/int32 (54 casos: fast + cval)
+./bin/string_int32     # Solo tests de lib/cnv/string_int32 (26 casos: fast + cval)
 ```
 
 ## Depuración
