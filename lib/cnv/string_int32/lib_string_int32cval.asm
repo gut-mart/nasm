@@ -1,23 +1,31 @@
 ; ==============================================================================
 ; LIBRERÍA: lib_string_int32cval.asm
 ; DESCRIPCIÓN: Capa 1 (Escudo). Identifica prefijos, valida caracteres
-;              y detecta overflow antes de delegar en la capa rápida.
+;              y detecta overflow POR VALOR antes de delegar en la capa rápida.
 ; CONTRATO:
 ;   Entrada: RDI = puntero a cadena terminada en NUL.
 ;   Salida:  EAX = valor convertido (válido solo si CF=0).
 ;            CF = 0 si la conversión es válida.
 ;            CF = 1 si la cadena no representa un número válido,
-;                   o si el valor no cabe en un int32 (overflow).
-; CORRECCIONES:
-;   - Antes devolvía EAX=0 silenciosamente al detectar error, lo que
-;     era ambiguo con el valor "0" legítimo. Ahora se usa Carry Flag
-;     como bandera de error fuera de banda.
-;   - Añadida detección de overflow por conteo de dígitos antes de
-;     delegar en lib_string_int32fast. Límites por base:
-;       Decimal     : máx 10 dígitos (4294967295)
-;       Hexadecimal : máx  8 dígitos (FFFFFFFF)
-;       Octal       : máx 11 dígitos (37777777777)
-;       Binario     : máx 32 dígitos (32 unos)
+;                   o si el valor no cabe en 32 bits (overflow).
+;
+; RANGOS ACEPTADOS (regla de tres topes):
+;   Decimal sin signo       : 0 .. 2147483647 (INT32_MAX). Un decimal es una
+;                             cantidad con signo; por encima de INT32_MAX el
+;                             int32 resultante sería un valor "inventado".
+;   Hex/bin/oct sin signo   : 0 .. 0xFFFFFFFF. Son patrones de bits de 32 bits
+;                             (colores, máscaras); 0xFFFFFFFF equivale a -1.
+;   Con signo '-' (cualquier base): magnitud 0 .. 2147483648 (|INT32_MIN|).
+;
+; ESTRATEGIA DE VALIDACIÓN DE OVERFLOW:
+;   Durante el mismo bucle que valida los caracteres, acumula el valor en un
+;   registro de 64 bits y comprueba tras cada dígito que no supera el tope.
+;   Como el acumulador entra en cada paso valiendo <= 0xFFFFFFFF, ningún paso
+;   puede envolver los 64 bits: la comprobación es siempre fiable, admite
+;   ceros a la izquierda y cualquier longitud de cadena. Mismo enfoque que
+;   la validación en 64 bits de lib_math_pow_int32cval.
+;   (Sustituye a la detección por conteo de dígitos, que dejaba pasar valores
+;   como 5000000000 —10 dígitos— o 0o77777777777 —11 dígitos octales—.)
 ; ==============================================================================
 
 default rel
@@ -32,7 +40,7 @@ lib_string_int32cval:
     mov rbp, rsp
     push rbx
     push r12                ; R12 = puntero al inicio de los dígitos (tras prefijo)
-    push r13                ; R13 = límite de dígitos según base
+    push r13                ; R13 = tope de valor según base y signo
 
     mov rbx, rdi            ; RBX = inicio de la cadena original
 
@@ -74,106 +82,136 @@ lib_string_int32cval:
 
 .prep_hex:
     add rdi, 2
-    mov r13, 8              ; Hex: máximo 8 dígitos
     jmp .val_hex
 .prep_bin:
     add rdi, 2
-    mov r13, 32             ; Bin: máximo 32 dígitos
     jmp .val_bin
 .prep_oct:
     add rdi, 2
-    mov r13, 11             ; Oct: máximo 11 dígitos
     jmp .val_oct
 .prep_dec:
     add rdi, 2
-    mov r13, 10             ; Dec: máximo 10 dígitos
     jmp .val_dec
 
     ; --- VALIDACIÓN HEXADECIMAL ---
 .val_hex:
     mov r12, rdi            ; Guardar inicio de dígitos
+    mov r13d, 0xFFFFFFFF    ; Tope: patrón de bits de 32 bits
+    call .ajustar_tope_signo
+    xor eax, eax            ; RAX = valor acumulado (64 bits)
 .val_hex_bucle:
-    mov cl, byte [rdi]
+    movzx ecx, byte [rdi]
     test cl, cl
-    jz .verificar_no_vacio_tras_prefijo
+    jz .fin_digitos
     cmp cl, '0'
     jl .error
     cmp cl, '9'
-    jle .next_hex
+    jle .hex_digito
     cmp cl, 'A'
     jl .error
     cmp cl, 'F'
-    jle .next_hex
+    jle .hex_letra
     cmp cl, 'a'
     jl .error
     cmp cl, 'f'
     jg .error
-.next_hex:
+.hex_letra:
+    and cl, 0xDF            ; Forzar mayúscula ('a'..'f' → 'A'..'F')
+    sub cl, 'A' - 10        ; ECX = 10..15
+    jmp .hex_acum
+.hex_digito:
+    sub cl, '0'             ; ECX = 0..9
+.hex_acum:
+    shl rax, 4              ; valor = valor*16 + dígito (en 64 bits)
+    add rax, rcx
+    cmp rax, r13
+    ja .error               ; Supera el tope → overflow
     inc rdi
     jmp .val_hex_bucle
 
     ; --- VALIDACIÓN BINARIA ---
 .val_bin:
     mov r12, rdi
+    mov r13d, 0xFFFFFFFF    ; Tope: patrón de bits de 32 bits
+    call .ajustar_tope_signo
+    xor eax, eax
 .val_bin_bucle:
-    mov cl, byte [rdi]
+    movzx ecx, byte [rdi]
     test cl, cl
-    jz .verificar_no_vacio_tras_prefijo
+    jz .fin_digitos
     cmp cl, '0'
     jl .error
     cmp cl, '1'
     jg .error
+    sub cl, '0'
+    shl rax, 1              ; valor = valor*2 + dígito
+    add rax, rcx
+    cmp rax, r13
+    ja .error
     inc rdi
     jmp .val_bin_bucle
 
     ; --- VALIDACIÓN OCTAL ---
 .val_oct:
     mov r12, rdi
+    mov r13d, 0xFFFFFFFF    ; Tope: patrón de bits de 32 bits
+    call .ajustar_tope_signo
+    xor eax, eax
 .val_oct_bucle:
-    mov cl, byte [rdi]
+    movzx ecx, byte [rdi]
     test cl, cl
-    jz .verificar_no_vacio_tras_prefijo
+    jz .fin_digitos
     cmp cl, '0'
     jl .error
     cmp cl, '7'
     jg .error
+    sub cl, '0'
+    shl rax, 3              ; valor = valor*8 + dígito
+    add rax, rcx
+    cmp rax, r13
+    ja .error
     inc rdi
     jmp .val_oct_bucle
 
     ; --- VALIDACIÓN DECIMAL ---
-    ; Para decimal no hay prefijo explícito, así que guardamos r12 aquí.
-    ; También asignamos el límite si no viene de .prep_dec.
+    ; Para decimal no hay prefijo obligatorio, así que r12/tope se fijan aquí.
 .val_dec:
     mov r12, rdi            ; Inicio de dígitos decimales
-    mov r13, 10             ; Dec: máximo 10 dígitos
+    mov r13d, 0x7FFFFFFF    ; Tope: INT32_MAX (un decimal es cantidad con signo)
+    call .ajustar_tope_signo
+    xor eax, eax
 .val_dec_bucle:
-    mov cl, byte [rdi]
+    movzx ecx, byte [rdi]
     test cl, cl
-    jz .comprobar_overflow
+    jz .fin_digitos
     cmp cl, '0'
     jl .error
     cmp cl, '9'
     jg .error
+    sub cl, '0'
+    lea rax, [rax + rax*4]  ; valor *= 5
+    add rax, rax            ; valor *= 2 (total ×10)
+    add rax, rcx
+    cmp rax, r13
+    ja .error
     inc rdi
     jmp .val_dec_bucle
 
-    ; --- VERIFICAR QUE TRAS PREFIJO HAY AL MENOS UN DÍGITO ---
-    ; Llegamos aquí desde hex/bin/oct cuando encontramos el NUL.
-    ; RDI apunta al NUL, R12 al primer carácter tras el prefijo.
-.verificar_no_vacio_tras_prefijo:
-    cmp rdi, r12
-    je .error               ; RDI == R12: no hubo ningún dígito tras el prefijo
-    ; Caemos en comprobar_overflow
+    ; --- Subrutina interna: si la cadena empieza por '-', el tope pasa a
+    ;     |INT32_MIN| = 2147483648, sea cual sea la base. No altera RDI/RCX. ---
+.ajustar_tope_signo:
+    cmp byte [rbx], '-'
+    jne .ats_ret
+    mov r13d, 0x80000000    ; Magnitud máxima de un negativo: |INT32_MIN|
+.ats_ret:
+    ret
 
-    ; --- DETECCIÓN DE OVERFLOW POR CONTEO DE DÍGITOS ---
-    ; RDI apunta al NUL final, R12 al primer dígito (tras prefijo).
-    ; R13 = límite máximo de dígitos para esta base.
-    ; Cuenta = RDI - R12. Si cuenta > R13, overflow.
-.comprobar_overflow:
-    mov rax, rdi
-    sub rax, r12            ; RAX = número de dígitos
-    cmp rax, r13
-    ja .error               ; Si dígitos > límite, overflow → error
+    ; --- FIN DE DÍGITOS ---
+    ; RDI apunta al NUL, R12 al primer carácter tras prefijo/signo.
+    ; Cubre "0x", "0d", "-0b"...: prefijo sin ningún dígito es error.
+.fin_digitos:
+    cmp rdi, r12
+    je .error               ; RDI == R12: no hubo ningún dígito
 
     ; --- DELEGACIÓN ---
 .exito:
