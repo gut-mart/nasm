@@ -10,7 +10,8 @@ falta, por qué se aplazó y qué haría falta para abordarla.
 
 ### Soporte de profundidad de color variable (bpp ≠ 32)
 
-**Estado:** pendiente.
+**Estado:** pendiente — siguiente paso: intentar reconfigurar el framebuffer
+del Tecra M10 a 16/24 bpp para poder verificar.
 
 **Descripción:**
 Las funciones de dibujado del motor (`lib_draw_pixelfast`, `lib_draw_rectfast`)
@@ -26,16 +27,22 @@ adyacentes. En la práctica, la mayoría de framebuffers Linux modernos exponen
 32 bpp por defecto.
 
 **Por qué se pospone:**
-No se puede verificar sin hardware donde probarlo. El equipo de pruebas actual
-(Tecra M10) trabaja a 32 bpp.
+Sin un framebuffer a 16/24 bpp no se puede verificar el cambio. El Tecra M10
+trabaja a 32 bpp por defecto, pero antes de descartar ese equipo hay que
+intentar reconfigurar su framebuffer a otra profundidad.
 
 **Qué haría falta para abordarlo:**
 
-1. Acceso a una máquina con framebuffer configurable a 16 o 24 bpp.
-2. Modificar `lib_draw_pixelfast` y `lib_draw_rectfast` para leer
+1. Probar en el Tecra si el framebuffer admite otra profundidad:
+   `fbset -depth 16` (suele fallar con drivers DRM como i915), o arrancar
+   con un framebuffer genérico que sí la admita (`nomodeset` + VESA, o
+   parámetro de kernel `video=`). Verificar el modo real con `fb_core`.
+2. Si el Tecra no lo permite, buscar otra máquina o probar en QEMU con
+   framebuffer VESA configurable.
+3. Modificar `lib_draw_pixelfast` y `lib_draw_rectfast` para leer
    `ScreenInfo.bpp` y calcular el factor de bytes en lugar de hardcodearlo.
-3. Para 24 bpp, escribir 3 bytes por píxel sin solapar.
-4. Probar visualmente en cada modo.
+4. Para 24 bpp, escribir 3 bytes por píxel sin solapar.
+5. Probar visualmente en cada modo.
 
 **Ubicación afectada:**
 
