@@ -66,6 +66,13 @@ igualdad que deja CF=0.
   grandes, contadores de ticks de 64 bits, o operaciones de máscara sin signo.
 - `lib/chrono` — ampliar con más benchmarks: `bench_pixel`, `bench_line`,
   `bench_circle`. Permitirá comparar el coste relativo de cada primitiva.
+- `lib_bmp_write` a 16/24 bpp — el bucle de lectura asume 4 bytes por píxel
+  (`add rbx, 4`) y copia B,G,R directos, así que `screenshot` produce una
+  captura corrupta en modos que no sean 32 bpp. Durante las pruebas de bpp
+  variable en el Tecra esto es **esperado**, no un fallo del dibujado.
+  Abordarlo cuando el modo 16 bpp esté verificado visualmente: leer 2/3/4
+  bytes según `ScreenInfo.bpp` y, a 16 bpp, expandir RGB565 → RGB888 con
+  los offsets/longitudes de canal.
 - Operaciones de color: brillo, fade, mezcla — primer usuario real de
   `lib_math_clamp_int32fast` para limitar canales RGB a [0, 255].
 - `run_tests.sh` — añadir compilación y `-h` de los comandos `tools/math`
