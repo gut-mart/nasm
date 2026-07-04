@@ -72,8 +72,9 @@ una TTY sin entorno gráfico.
 
 ### fb_core
 
-Muestra el diagnóstico del framebuffer: resolución, profundidad de color y
-offsets de cada canal.
+Muestra el diagnóstico del framebuffer: resolución, profundidad de color, y
+offset y longitud en bits de cada canal (a 32 bpp lo típico es 16/8/0 con
+8 bits por canal; a 16 bpp RGB565 sería 11/5/0 con longitudes 5/6/5).
 
 ```bash
 sudo ./bin/fb_core          # diagnóstico completo

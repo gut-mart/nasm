@@ -10,28 +10,30 @@ falta, por qué se aplazó y qué haría falta para abordarla.
 
 ### Soporte de profundidad de color variable (bpp ≠ 32)
 
-**Estado:** pendiente — siguiente paso: intentar reconfigurar el framebuffer
-del Tecra M10 a 16/24 bpp para poder verificar.
+**Estado:** código implementado y verificado a nivel de memoria (2026-07-04),
+**pendiente de verificación visual** en un framebuffer real a 16/24 bpp.
+
+El test unitario `draw_bpp` (23 casos) verifica sobre un framebuffer falso en
+memoria: offsets, tamaño de escritura (2/3/4 bytes), no-solapamiento, salto de
+fila con padding de pitch en los tres modos, y el contrato CF de los cuatro
+`cval` gráficos. Lo único que NO puede verificar es el aspecto en pantalla.
 
 **Descripción:**
-Las funciones de dibujado del motor (`lib_draw_pixelfast`, `lib_draw_rectfast`)
-asumen que el framebuffer trabaja a 32 bits por píxel (4 bytes por píxel).
-En el cálculo del offset X y en la escritura final usan `shl X, 2` y
-`mov dword [...]` directamente, en lugar de leer `ScreenInfo.bpp` y calcular
-el factor de bytes en tiempo de ejecución.
+Las funciones de dibujado del motor asumían bpp=32 en la escritura final
+(`mov dword`). Ya no: `lib_draw_pixelfast` y `lib_draw_rectfast` leen
+`ScreenInfo.bpp` y escriben 2, 3 o 4 bytes por píxel según el modo (16/24/32).
+A 24 bpp se escriben los 3 bytes bajos sin solapar; a 16 bpp los 2 bytes bajos
+(el llamante pasa el patrón ya empaquetado, p. ej. RGB565). `line` y `circle`
+heredan el soporte porque delegan en `pixel`.
 
-**Impacto actual:**
-Si el framebuffer del sistema está configurado a 16 bpp o 24 bpp, los píxeles
-caen en posiciones incorrectas y la escritura de 4 bytes solapa píxeles
-adyacentes. En la práctica, la mayoría de framebuffers Linux modernos exponen
-32 bpp por defecto.
+**Cambio lateral (norma 7):** al introducir `cmp` en `pixelfast`, este pasó a
+alterar CF, y los cuatro `cval` gráficos (pixel, rect, line, circle) migraron
+de la opción A (`clc + jmp fast`) a la opción B (`call fast + clc + ret`).
+En line y circle la opción A ya era incorrecta según la norma (sus `fast`
+usan `cmp`) y funcionaba solo porque sus bucles salen con una comparación de
+igualdad que deja CF=0.
 
-**Por qué se pospone:**
-Sin un framebuffer a 16/24 bpp no se puede verificar el cambio. El Tecra M10
-trabaja a 32 bpp por defecto, pero antes de descartar ese equipo hay que
-intentar reconfigurar su framebuffer a otra profundidad.
-
-**Qué haría falta para abordarlo:**
+**Qué falta para cerrarlo:**
 
 1. Probar en el Tecra si el framebuffer admite otra profundidad:
    `fbset -depth 16` (suele fallar con drivers DRM como i915), o arrancar
@@ -39,15 +41,19 @@ intentar reconfigurar su framebuffer a otra profundidad.
    parámetro de kernel `video=`). Verificar el modo real con `fb_core`.
 2. Si el Tecra no lo permite, buscar otra máquina o probar en QEMU con
    framebuffer VESA configurable.
-3. Modificar `lib_draw_pixelfast` y `lib_draw_rectfast` para leer
-   `ScreenInfo.bpp` y calcular el factor de bytes en lugar de hardcodearlo.
-4. Para 24 bpp, escribir 3 bytes por píxel sin solapar.
-5. Probar visualmente en cada modo.
+3. Probar visualmente en cada modo: `draw_pixel`, `draw_rect`, `draw_line`,
+   `draw_circle` y `screenshot`. Los colores `0xRRGGBB` deben verse
+   correctos en todos los modos: `lib_color_pack` ya trunca los canales a
+   su longitud real (RGB565 incluido) y todos los comandos pasan por él.
+   `fb_core` (y `fb_core -p`) muestra offsets y longitudes de canal para
+   confirmar el modo real.
 
 **Ubicación afectada:**
 
-- `lib/graph/draw/pixel/lib_draw_pixelfast.asm`
-- `lib/graph/draw/rect/lib_draw_rectfast.asm`
+- `lib/graph/draw/pixel/lib_draw_pixelfast.asm` (+ cval)
+- `lib/graph/draw/rect/lib_draw_rectfast.asm` (+ cval)
+- `lib/graph/draw/line/lib_draw_linecval.asm`
+- `lib/graph/draw/circle/lib_draw_circlecval.asm`
 
 ---
 
@@ -350,6 +356,38 @@ los binarios en `~/bin` sin necesidad de especificar la ruta completa.
 - `comandos/monitor/draw_rect/draw_rect.asm`
 - `comandos/monitor/draw_line/draw_line.asm`
 - `comandos/monitor/draw_circle/draw_circle.asm`
+
+---
+
+### `lib_color_pack` universal por bpp: longitudes de canal en `ScreenInfo`
+
+**Resuelto:** 2026-07-04
+
+**Descripción:**
+`lib_color_pack` colocaba cada canal de 8 bits en su offset sin truncarlo a la
+longitud real del canal, así que a 16 bpp (RGB565, canales de 5/6/5 bits) el
+resultado era basura y había que pasar el patrón empaquetado a mano.
+
+**Solución aplicada:**
+`ScreenInfo` amplía con `red_len`/`green_len`/`blue_len`/`transp_len` (el
+kernel las devuelve en el mismo `ioctl` `FBIOGET_VSCREENINFO`, campo `length`
+de cada `fb_bitfield`; tamaño de la estructura: 56 → 72 bytes). `fb_core` las
+rellena y `lib_color_pack` trunca cada canal (`shr` de `8 - len`) antes del
+desplazamiento al offset. Con canales de 8 bits el truncado es nulo (idéntico
+comportamiento a 24/32 bpp); a 16 bpp produce RGB565 correcto. Como los cuatro
+comandos de dibujo pasan por `lib_color_pack`, el flujo `0xRRGGBB` → pantalla
+funciona sin cambios en cualquier modo. El comando `fb_core` muestra ahora
+offsets y longitudes de canal en ambos formatos de salida.
+
+Test `draw_bpp` ampliado a 29 casos (identidad a 24/32 bpp, RGB565 y la
+integración pack→pixel). Pendiente solo la verificación visual en hardware
+real, junto con la del resto del soporte de bpp variable (ver Pendientes).
+
+**Ubicación:**
+- `lib/graph/core/lib_fb_core.inc` (+ `lib_fb_core.asm`)
+- `lib/graph/color/lib_color_pack.asm`
+- `comandos/monitor/core/fb_core.asm`
+- `comandos/tests/draw_bpp/draw_bpp.asm`
 
 ---
 

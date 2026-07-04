@@ -184,6 +184,12 @@ La estructura `ScreenInfo` y su tamaño están en `lib/graph/core/lib_fb_core.in
 RDI=ScreenInfo, ESI=color 0xRRGGBB → EAX=color empaquetado para el hardware.
 ```
 
+Usa los offsets **y las longitudes** de canal de `ScreenInfo`: cada canal de
+8 bits se trunca a su longitud real antes de colocarse en su offset. Con
+canales de 8 bits (24/32 bpp) el resultado es la identidad; a 16 bpp produce
+RGB565 correcto (`0xFFFFFF` → `0xFFFF`, `0xFF0000` → `0xF800`). Asume
+longitudes ≤ 8 bits.
+
 ### Primitivas de dibujado
 
 Todas con patrón fast/cval. ABI común: `RDI=ScreenInfo`, luego coordenadas.
@@ -197,7 +203,22 @@ Todas con patrón fast/cval. ABI común: `RDI=ScreenInfo`, luego coordenadas.
 
 Los `cval` hacen clipping. CF=1 si la figura queda totalmente fuera (el llamante
 puede ignorarlo — los comandos de usuario lo tratan como exit 0, no como error).
-Los `fast` asumen coordenadas válidas. **Nota:** todas asumen bpp=32.
+Los `fast` asumen coordenadas válidas.
+
+**Profundidad de color (bpp):** las primitivas leen `ScreenInfo.bpp` y soportan
+16, 24 y 32 bpp. El color que reciben es el **patrón de bits nativo del
+framebuffer**, no un RGB abstracto:
+
+- **32 bpp** — se escriben los 4 bytes del color (uso habitual: `lib_color_pack`).
+- **24 bpp** — se escriben los 3 bytes bajos, sin solapar píxeles vecinos. Un
+  color `0x00RRGGBB` produce los mismos bytes B,G,R que a 32 bpp: se ve igual.
+- **16 bpp** — se escriben los 2 bytes bajos. El patrón (p. ej. RGB565) lo
+  produce `lib_color_pack` a partir de un `0xRRGGBB` estándar, usando las
+  longitudes de canal de `ScreenInfo`. Los comandos de dibujo ya pasan por
+  `lib_color_pack`, así que funcionan sin cambios en cualquier modo.
+
+Otras profundidades no están soportadas. Pendiente de verificación visual en
+hardware real a 16/24 bpp (ver TODO.md).
 
 ### lib_bmp_write — framebuffer → BMP
 
