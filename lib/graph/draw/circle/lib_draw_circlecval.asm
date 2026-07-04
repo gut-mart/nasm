@@ -85,8 +85,11 @@ lib_draw_circlecval:
     pop r12
     pop rbx
     pop rbp
+    ; DELEGACIÓN (OPCIÓN B): lib_draw_circlefast usa cmp (punto medio), que
+    ; altera CF. Un clc previo al tail-call se perdería (NORMAS sección 7).
+    call lib_draw_circlefast
     clc
-    jmp lib_draw_circlefast
+    ret
 
 .rechazar:
     pop r15

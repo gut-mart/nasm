@@ -36,11 +36,12 @@ lib_draw_pixelcval:
     cmp edx, dword [rdi + ScreenInfo.height]
     jge .fuera_de_limites                   ; Si Y >= Alto de pantalla, abortar
 
-    ; --- DELEGACIÓN (TAIL CALL) ---
-    ; Limpiamos CF=0 antes del tail-call. lib_draw_pixelfast no toca CF
-    ; de forma intencional, así que su `ret` preserva CF=0 hacia el llamante.
+    ; --- DELEGACIÓN (OPCIÓN B) ---
+    ; lib_draw_pixelfast usa cmp para el despacho por bpp, que altera CF.
+    ; Un clc previo al tail-call se perdería: call + clc + ret (NORMAS sec. 7).
+    call lib_draw_pixelfast
     clc
-    jmp lib_draw_pixelfast
+    ret
 
 .fuera_de_limites:
     stc                                     ; CF=1: pixel fuera, no dibujado

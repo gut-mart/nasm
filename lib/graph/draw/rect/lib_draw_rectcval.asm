@@ -54,11 +54,13 @@ lib_draw_rectcval:
     sub r8d, edx                ; H = ScreenHeight - Y (Recortar por abajo)
     jle .abortar
 
-    ; --- 3. DELEGACIÓN ---
+    ; --- 3. DELEGACIÓN (OPCIÓN B) ---
 .dibujar:
-    ; Limpiamos CF=0. lib_draw_rectfast no toca CF intencionadamente.
+    ; lib_draw_rectfast usa cmp/add/sub, que alteran CF. Un clc previo al
+    ; tail-call se perdería: call + clc + ret (NORMAS sección 7).
+    call lib_draw_rectfast
     clc
-    jmp lib_draw_rectfast
+    ret
 
 .abortar:
     stc                         ; CF=1: rectángulo totalmente fuera

@@ -236,8 +236,11 @@ lib_draw_linecval:
     pop r12
     pop rbx
     pop rbp
+    ; DELEGACIÓN (OPCIÓN B): lib_draw_linefast usa cmp/add (Bresenham), que
+    ; alteran CF. Un clc previo al tail-call se perdería (NORMAS sección 7).
+    call lib_draw_linefast
     clc
-    jmp lib_draw_linefast
+    ret
 
 .rechazar:
     add rsp, 32
