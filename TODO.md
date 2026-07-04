@@ -21,14 +21,6 @@ falta, por qué se aplazó y qué haría falta para abordarla.
   grandes, contadores de ticks de 64 bits, o operaciones de máscara sin signo.
 - `lib/chrono` — ampliar con más benchmarks: `bench_pixel`, `bench_line`,
   `bench_circle`. Permitirá comparar el coste relativo de cada primitiva.
-- `lib_bmp_write` a 16/24 bpp — el bucle de lectura asume 4 bytes por píxel
-  (`add rbx, 4`) y copia B,G,R directos, así que `screenshot` produce una
-  captura corrupta en modos que no sean 32 bpp. Es el único componente
-  gráfico que queda atado a 32 bpp tras cerrar el soporte de bpp variable
-  (verificado 2026-07-04), y el siguiente candidato natural: leer 2/3/4
-  bytes según `ScreenInfo.bpp` y, a 16 bpp, expandir RGB565 → RGB888 con
-  los offsets/longitudes de canal. La prueba en el Tecra es directa con
-  `activar_16bpp.sh` + `screenshot` + comparar con lo dibujado.
 - Operaciones de color: brillo, fade, mezcla — primer usuario real de
   `lib_math_clamp_int32fast` para limitar canales RGB a [0, 255].
 - `run_tests.sh` — añadir compilación y `-h` de los comandos `tools/math`
@@ -319,6 +311,33 @@ los binarios en `~/bin` sin necesidad de especificar la ruta completa.
 - `comandos/monitor/draw_rect/draw_rect.asm`
 - `comandos/monitor/draw_line/draw_line.asm`
 - `comandos/monitor/draw_circle/draw_circle.asm`
+
+---
+
+### `lib_bmp_write` con bpp variable y pitch real (screenshot a 16/24 bpp)
+
+**Resuelto:** 2026-07-04 — verificado con una captura real a 16 bpp en el Tecra.
+
+**Descripción:**
+El bucle de lectura de `lib_bmp_write` asumía 4 bytes por píxel (`add rbx, 4`)
+y copiaba B,G,R directos: a 16/24 bpp `screenshot` producía basura. Además
+asumía filas contiguas (ignoraba el pitch): en un framebuffer con padding de
+fila la imagen habría salido escalonada (en el Tecra cuadraba de casualidad).
+
+**Solución aplicada:**
+Cada fila se lee desde `ptr_mem + fila*pitch` y el bucle de píxeles se
+despacha por `ScreenInfo.bpp`: a 32 bpp copia B,G,R y salta el relleno, a
+24 bpp copia 3 bytes, y a 16 bpp desempaqueta cada canal con los
+offsets/longitudes de `ScreenInfo` (subrutina `.extraer_canal`, el inverso de
+`lib_color_pack`) expandiendo a 8 bits por replicación de bits — el máximo del
+canal (0b11111) satura a 0xFF exacto, así el blanco RGB565 vuelve como blanco
+puro. Verificado capturando la carta de ajuste a 16 bpp en el Tecra: colores,
+degradados, clipping y formas exactos (`docs/capturas/carta_ajuste_16bpp.png`,
+enlazada en el README).
+
+**Ubicación:**
+- `lib/graph/bmp/lib_bmp_write.asm`
+- `docs/capturas/carta_ajuste_16bpp.png`
 
 ---
 

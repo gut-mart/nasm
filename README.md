@@ -184,6 +184,16 @@ make test              # Suite completa
                        # (29 casos, framebuffer falso en memoria) y contrato CF
 ```
 
+### Verificación en hardware real
+
+Carta de ajuste dibujada con los comandos del proyecto en un Toshiba Tecra M10
+arrancado a **16 bpp** (VESA, RGB565) y capturada con `screenshot` (2026-07-04).
+Barras de color, degradados de 16 pasos por canal, abanico de líneas (Bresenham),
+círculos concéntricos y clipping en los bordes — todos con colores `0xRRGGBB`
+estándar empaquetados en tiempo de ejecución por `lib_color_pack`:
+
+![Carta de ajuste a 16 bpp en el Tecra M10](docs/capturas/carta_ajuste_16bpp.png)
+
 ## Depuración
 
 El proyecto compila siempre con símbolos DWARF (`-g -F dwarf` en NASM).

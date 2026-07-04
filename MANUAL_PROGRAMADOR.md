@@ -226,6 +226,12 @@ hardware real a 16/24 bpp (ver TODO.md).
 RDI=ScreenInfo (mapeada), RSI=puntero a ruta de archivo → escribe BMP 24bpp.
 ```
 
+Soporta framebuffers de 16, 24 y 32 bpp: recorre cada fila desde
+`ptr_mem + fila*pitch` (respeta el padding de fila) y lee 2/3/4 bytes por
+píxel. A 16 bpp desempaqueta cada canal con los offsets/longitudes de
+`ScreenInfo` y lo expande a 8 bits por replicación de bits (el máximo del
+canal satura a 0xFF). El BMP resultante es siempre de 24 bits.
+
 ---
 
 ## lib/chrono — Medición de ciclos
