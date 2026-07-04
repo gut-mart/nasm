@@ -8,52 +8,7 @@ falta, por qué se aplazó y qué haría falta para abordarla.
 
 ## Pendientes técnicos
 
-### Soporte de profundidad de color variable (bpp ≠ 32)
-
-**Estado:** código implementado y verificado a nivel de memoria (2026-07-04),
-**pendiente de verificación visual** en un framebuffer real a 16/24 bpp.
-
-El test unitario `draw_bpp` (23 casos) verifica sobre un framebuffer falso en
-memoria: offsets, tamaño de escritura (2/3/4 bytes), no-solapamiento, salto de
-fila con padding de pitch en los tres modos, y el contrato CF de los cuatro
-`cval` gráficos. Lo único que NO puede verificar es el aspecto en pantalla.
-
-**Descripción:**
-Las funciones de dibujado del motor asumían bpp=32 en la escritura final
-(`mov dword`). Ya no: `lib_draw_pixelfast` y `lib_draw_rectfast` leen
-`ScreenInfo.bpp` y escriben 2, 3 o 4 bytes por píxel según el modo (16/24/32).
-A 24 bpp se escriben los 3 bytes bajos sin solapar; a 16 bpp los 2 bytes bajos
-(el llamante pasa el patrón ya empaquetado, p. ej. RGB565). `line` y `circle`
-heredan el soporte porque delegan en `pixel`.
-
-**Cambio lateral (norma 7):** al introducir `cmp` en `pixelfast`, este pasó a
-alterar CF, y los cuatro `cval` gráficos (pixel, rect, line, circle) migraron
-de la opción A (`clc + jmp fast`) a la opción B (`call fast + clc + ret`).
-En line y circle la opción A ya era incorrecta según la norma (sus `fast`
-usan `cmp`) y funcionaba solo porque sus bucles salen con una comparación de
-igualdad que deja CF=0.
-
-**Qué falta para cerrarlo:**
-
-1. Probar en el Tecra si el framebuffer admite otra profundidad:
-   `fbset -depth 16` (suele fallar con drivers DRM como i915), o arrancar
-   con un framebuffer genérico que sí la admita (`nomodeset` + VESA, o
-   parámetro de kernel `video=`). Verificar el modo real con `fb_core`.
-2. Si el Tecra no lo permite, buscar otra máquina o probar en QEMU con
-   framebuffer VESA configurable.
-3. Probar visualmente en cada modo: `draw_pixel`, `draw_rect`, `draw_line`,
-   `draw_circle` y `screenshot`. Los colores `0xRRGGBB` deben verse
-   correctos en todos los modos: `lib_color_pack` ya trunca los canales a
-   su longitud real (RGB565 incluido) y todos los comandos pasan por él.
-   `fb_core` (y `fb_core -p`) muestra offsets y longitudes de canal para
-   confirmar el modo real.
-
-**Ubicación afectada:**
-
-- `lib/graph/draw/pixel/lib_draw_pixelfast.asm` (+ cval)
-- `lib/graph/draw/rect/lib_draw_rectfast.asm` (+ cval)
-- `lib/graph/draw/line/lib_draw_linecval.asm`
-- `lib/graph/draw/circle/lib_draw_circlecval.asm`
+(No hay pendientes técnicos abiertos.)
 
 ---
 
@@ -68,11 +23,12 @@ igualdad que deja CF=0.
   `bench_circle`. Permitirá comparar el coste relativo de cada primitiva.
 - `lib_bmp_write` a 16/24 bpp — el bucle de lectura asume 4 bytes por píxel
   (`add rbx, 4`) y copia B,G,R directos, así que `screenshot` produce una
-  captura corrupta en modos que no sean 32 bpp. Durante las pruebas de bpp
-  variable en el Tecra esto es **esperado**, no un fallo del dibujado.
-  Abordarlo cuando el modo 16 bpp esté verificado visualmente: leer 2/3/4
+  captura corrupta en modos que no sean 32 bpp. Es el único componente
+  gráfico que queda atado a 32 bpp tras cerrar el soporte de bpp variable
+  (verificado 2026-07-04), y el siguiente candidato natural: leer 2/3/4
   bytes según `ScreenInfo.bpp` y, a 16 bpp, expandir RGB565 → RGB888 con
-  los offsets/longitudes de canal.
+  los offsets/longitudes de canal. La prueba en el Tecra es directa con
+  `activar_16bpp.sh` + `screenshot` + comparar con lo dibujado.
 - Operaciones de color: brillo, fade, mezcla — primer usuario real de
   `lib_math_clamp_int32fast` para limitar canales RGB a [0, 255].
 - `run_tests.sh` — añadir compilación y `-h` de los comandos `tools/math`
@@ -363,6 +319,53 @@ los binarios en `~/bin` sin necesidad de especificar la ruta completa.
 - `comandos/monitor/draw_rect/draw_rect.asm`
 - `comandos/monitor/draw_line/draw_line.asm`
 - `comandos/monitor/draw_circle/draw_circle.asm`
+
+---
+
+### Soporte de profundidad de color variable (bpp ≠ 32)
+
+**Resuelto:** 2026-07-04 — verificado en hardware real a 16 bpp.
+
+**Descripción:**
+Las funciones de dibujado del motor asumían bpp=32 en la escritura final
+(`mov dword`): a 16/24 bpp los píxeles solapaban a sus vecinos. Ahora
+`lib_draw_pixelfast` y `lib_draw_rectfast` leen `ScreenInfo.bpp` y escriben
+2, 3 o 4 bytes por píxel según el modo; `line` y `circle` heredan el soporte
+porque delegan en `pixel`, y `lib_color_pack` produce el patrón correcto en
+cualquier modo (ver entrada siguiente).
+
+**Cambio lateral (norma 7):** al introducir `cmp` en `pixelfast`, este pasó a
+alterar CF, y los cuatro `cval` gráficos migraron de la opción A
+(`clc + jmp fast`) a la opción B (`call fast + clc + ret`). En line y circle
+la opción A ya era incorrecta según la norma y funcionaba de casualidad.
+
+**Verificación (tres niveles):**
+
+1. Test unitario `draw_bpp` (29 casos, framebuffer falso en memoria).
+2. Byte a byte sobre el framebuffer REAL del Tecra M10 vía SSH, leyendo
+   `/dev/fb0` con `dd` tras dibujar:
+   - a 32 bpp (i915, 1280×800): `0xAABBCC` → `cc bb aa 00` en los offsets
+     exactos, salto de fila correcto, vecinos intactos.
+   - a 16 bpp (VESA `nomodeset vga=791`, 1024×768 RGB565): rojo `0xFF0000`
+     → `00 f8` (0xF800), verde → `e0 07`, azul → `1f 00`, blanco → `ff ff`,
+     píxeles consecutivos sin solaparse, pitch 2048 respetado.
+3. Visual en la pantalla del Tecra a 16 bpp: rectángulos rojo/verde/azul/
+   blanco/gris/naranja, diagonal y círculo — colores y formas correctos.
+
+Notas de la verificación: el cambio de profundidad en caliente
+(`FBIOPUT_VSCREENINFO`) es ignorado por `i915drmfb` (acepta el ioctl pero
+mantiene 32 bpp) — para probar otros modos hay que arrancar con
+`nomodeset vga=791` (16 bpp) o `vga=792` (24 bpp, no probado en hardware;
+cubierto por el test unitario). Scripts `activar_16bpp.sh` /
+`restaurar_32bpp.sh` en el home del Tecra para repetir la prueba.
+
+**Ubicación:**
+
+- `lib/graph/draw/pixel/lib_draw_pixelfast.asm` (+ cval)
+- `lib/graph/draw/rect/lib_draw_rectfast.asm` (+ cval)
+- `lib/graph/draw/line/lib_draw_linecval.asm` (+ fast, cabecera)
+- `lib/graph/draw/circle/lib_draw_circlecval.asm` (+ fast, cabecera)
+- `comandos/tests/draw_bpp/draw_bpp.asm`
 
 ---
 
