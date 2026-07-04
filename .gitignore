@@ -40,6 +40,10 @@ debug.txt
 # Ver config.example.mk como plantilla.
 config.local.mk
 
+# Permisos locales de Claude Code (se regenera al aprobar comandos con
+# "permitir siempre"; ligado a la máquina de cada desarrollador).
+.claude/settings.local.json
+
 # --- Makefiles autogenerados en carpetas de comandos ---
 # Son derivados del .asm correspondiente. Los regenera setup.sh durante
 # la instalación (vía bootstrap de monitor_comandos.sh) y monitor_comandos.sh
