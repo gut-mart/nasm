@@ -2,10 +2,22 @@
 ; RUTA: ./lib/graph/bmp/lib_bmp_write.asm
 ; DESCRIPCIÓN: Escribe el contenido del framebuffer en un archivo BMP de 24 bits
 ;              sin compresión, compatible con cualquier visor de imágenes.
+; CONTRATO:
+;   Entrada: RDI = ScreenInfo (mapeada con fb_map)
+;            RSI = puntero a ruta del archivo (cadena NUL)
+;   Salida:  RAX = 0 éxito, RAX = -1 error de archivo.
+; SOPORTE bpp: lee ScreenInfo.bpp y recorre el framebuffer con el tamaño real
+;   de píxel (2/3/4 bytes). A 32/24 bpp copia B,G,R directos; a 16 bpp
+;   desempaqueta cada canal con los offsets y longitudes de ScreenInfo
+;   (RGB565 o similar) y lo expande a 8 bits replicando los bits altos
+;   (0b11111 → 0xFF, para que el blanco sature de verdad).
 ; CORRECCIÓN v4: bytes_por_fila se guardaba como dword pero se leía como qword,
 ;                los 4 bytes superiores contenían basura del stack causando un
 ;                bucle de padding de ~4 millones de iteraciones y segfault.
 ;                Corregido: se guarda y lee como qword consistentemente.
+; CORRECCIÓN v5: cada fila se lee desde ptr_mem + fila*pitch en lugar de
+;                asumir filas contiguas (pitch == ancho*bytes). En hardware
+;                con padding de fila la imagen salía escalonada.
 ; ==============================================================================
 
 %include "lib/constants.inc"
@@ -39,8 +51,10 @@ section .text
 ;   R13  = ruta archivo
 ;   R14D = ancho (width)
 ;   R15D = alto (height)
-;   [rbp - 48] = file descriptor        (qword)
-;   [rbp - 56] = bytes por fila padding (qword) ← CORREGIDO: qword, no dword
+;   [rbp - 48] = file descriptor          (qword)
+;   [rbp - 56] = bytes por fila + padding (qword)
+;   [rbp - 64] = pitch del framebuffer    (qword)
+;   [rbp - 72] = bytes por píxel          (qword)
 ;   R10D = fila actual
 ;   R11  = contador píxeles / padding
 ; ------------------------------------------------------------------------------
@@ -52,7 +66,7 @@ lib_bmp_write:
     push r13
     push r14
     push r15
-    sub rsp, 16             ; [rbp-48]=FD, [rbp-56]=bytes_por_fila
+    sub rsp, 32             ; ver mapa de registros
 
     mov r12, rdi
     mov r13, rsi
@@ -60,7 +74,14 @@ lib_bmp_write:
     mov r14d, dword [r12 + ScreenInfo.width]
     mov r15d, dword [r12 + ScreenInfo.height]
 
-    ; --- bytes por fila con padding: (ancho*3 + 3) & ~3 ---
+    ; --- pitch y bytes por píxel del framebuffer real ---
+    mov eax, dword [r12 + ScreenInfo.pitch]
+    mov qword [rbp - 64], rax
+    mov eax, dword [r12 + ScreenInfo.bpp]
+    shr eax, 3
+    mov qword [rbp - 72], rax
+
+    ; --- bytes por fila BMP con padding: (ancho*3 + 3) & ~3 ---
     mov eax, r14d
     imul eax, 3
     add eax, 3
@@ -115,18 +136,32 @@ lib_bmp_write:
     cmp rax, BMP_HEADER_SIZE
     jne .error_close
 
-    ; --- Inicializar puntero framebuffer en RBX ---
-    mov rbx, qword [r12 + ScreenInfo.ptr_mem]
     xor r10d, r10d
 
 .bucle_filas:
     cmp r10d, r15d
     jge .filas_fin
 
+    ; Inicio REAL de la fila: ptr_mem + fila * pitch (v5: respeta el padding
+    ; de fila del framebuffer, no asume filas contiguas)
+    mov eax, r10d
+    imul rax, qword [rbp - 64]
+    add rax, qword [r12 + ScreenInfo.ptr_mem]
+    mov rbx, rax
+
     lea rdi, [row_buffer]
     mov r11d, r14d
 
-.bucle_pixeles:
+    ; Despacho por bytes por píxel (una vez por fila)
+    mov rax, qword [rbp - 72]
+    cmp eax, 4
+    je .pix32
+    cmp eax, 3
+    je .pix24
+    jmp .pix16
+
+    ; --- 32 bpp: copiar B,G,R y saltar el byte de relleno ---
+.pix32:
     test r11d, r11d
     jz .pixeles_fin
     mov al, byte [rbx + 0]
@@ -138,7 +173,48 @@ lib_bmp_write:
     add rbx, 4
     add rdi, 3
     dec r11d
-    jmp .bucle_pixeles
+    jmp .pix32
+
+    ; --- 24 bpp: copiar B,G,R directos ---
+.pix24:
+    test r11d, r11d
+    jz .pixeles_fin
+    mov al, byte [rbx + 0]
+    mov byte [rdi + 0], al
+    mov al, byte [rbx + 1]
+    mov byte [rdi + 1], al
+    mov al, byte [rbx + 2]
+    mov byte [rdi + 2], al
+    add rbx, 3
+    add rdi, 3
+    dec r11d
+    jmp .pix24
+
+    ; --- 16 bpp: desempaquetar cada canal con offsets/longitudes reales ---
+.pix16:
+    test r11d, r11d
+    jz .pixeles_fin
+    movzx edx, word [rbx]           ; EDX = palabra cruda del píxel
+
+    mov r8d, dword [r12 + ScreenInfo.blue_off]
+    mov r9d, dword [r12 + ScreenInfo.blue_len]
+    call .extraer_canal
+    mov byte [rdi + 0], al          ; B
+
+    mov r8d, dword [r12 + ScreenInfo.green_off]
+    mov r9d, dword [r12 + ScreenInfo.green_len]
+    call .extraer_canal
+    mov byte [rdi + 1], al          ; G
+
+    mov r8d, dword [r12 + ScreenInfo.red_off]
+    mov r9d, dword [r12 + ScreenInfo.red_len]
+    call .extraer_canal
+    mov byte [rdi + 2], al          ; R
+
+    add rbx, 2
+    add rdi, 3
+    dec r11d
+    jmp .pix16
 
 .pixeles_fin:
     ; calcular padding = bytes_por_fila - (ancho * 3)
@@ -181,11 +257,40 @@ lib_bmp_write:
 .error:
     mov rax, -1
 .fin:
-    add rsp, 16
+    add rsp, 32
     pop r15
     pop r14
     pop r13
     pop r12
     pop rbx
     leave
+    ret
+
+; ------------------------------------------------------------------------------
+; .extraer_canal — extrae un canal de una palabra de 16 bpp y lo expande a 8 bits.
+; ENTRADA: EDX = palabra cruda del píxel (se preserva)
+;          R8D = offset del canal, R9D = longitud del canal (bits)
+; SALIDA:  AL  = canal expandido a 8 bits.
+; NOTA: expansión por replicación de bits: (v << (8-len)) | (v >> (2*len-8)),
+;       así el máximo del canal (0b11111) mapea a 0xFF exacto y el 0 a 0x00.
+;       Destruye EAX, ECX, R8D. Longitud 0 → canal ausente → devuelve 0.
+; ------------------------------------------------------------------------------
+.extraer_canal:
+    mov ecx, r8d
+    mov eax, edx
+    shr eax, cl                     ; alinear el canal al bit 0
+    mov ecx, r9d
+    mov r8d, 1
+    shl r8d, cl
+    dec r8d                         ; R8D = máscara (1<<len)-1
+    and eax, r8d                    ; EAX = valor crudo del canal
+    mov r8d, eax
+    mov ecx, 8
+    sub ecx, r9d
+    shl eax, cl                     ; v << (8-len): bits altos del resultado
+    mov ecx, r9d
+    add ecx, ecx
+    sub ecx, 8                      ; 2*len - 8
+    shr r8d, cl                     ; replicar los bits altos en los bajos
+    or eax, r8d
     ret
